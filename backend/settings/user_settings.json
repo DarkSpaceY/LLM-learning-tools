@@ -1,0 +1,7 @@
+{
+  "global": {
+    "default_model": "deepseek-r1:8b",
+    "theme": "light",
+    "language": "zh-CN"
+  }
+}
