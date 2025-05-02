@@ -1,7 +1,52 @@
 {
   "global": {
-    "default_model": "deepseek-r1:8b",
+    "default_provider": "openrouter",
     "theme": "light",
-    "language": "zh-CN"
+    "language": "zh-CN",
+    "ollama": {
+      "api_key": "",
+      "base_url": "http://localhost:11434",
+      "model_name": "deepseek-r1:8b",
+      "temperature": 0.7,
+      "max_tokens": -1,
+      "models": []
+    },
+    "deepseek": {
+      "api_key": "",
+      "base_url": "https://api.deepseek.com/v1",
+      "model_name": "deepseek-chat",
+      "temperature": 0.7,
+      "max_tokens": -1,
+      "models": [
+        {
+          "id": "deepseek-chat",
+          "name": "DeepSeek Chat",
+          "type": "Chat",
+          "description": "DeepSeek通用聊天模型"
+        },
+        {
+          "id": "deepseek-coder",
+          "name": "DeepSeek Coder",
+          "type": "Code",
+          "description": "DeepSeek专业代码模型"
+        }
+      ]
+    },
+    "openai": {
+      "api_key": "",
+      "base_url": "https://api.openai-proxy.com/v1",
+      "model_name": "gpt-3.5-turbo",
+      "temperature": 0.7,
+      "max_tokens": -1,
+      "models": []
+    },
+    "openrouter": {
+      "api_key": "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",
+      "base_url": "https://openrouter.ai/api/v1",
+      "model_name": "qwen/qwen3-235b-a22b",
+      "temperature": 0.7,
+      "max_tokens": -1,
+      "models": []
+    }
   }
 }

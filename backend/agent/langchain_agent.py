@@ -13,121 +13,46 @@ from .tools.content_generator import (
     generate_chapter_outline,
     generate_section_content
 )
+from .llm_providers import (
+    BaseLLM,
+    DeepSeekLLM,
+    OpenAILLM,
+    OpenRouterLLM
+)
+from .llm_providers import api_config, get_provider_config, get_user_settings
 
 
-class OllamaConfig(BaseSettings):
-    """Ollama配置"""
-    model_name: str = Field(
-        default="deepseek-r1:8b",
-        description="Ollama模型名称"
-    )
-    base_url: str = Field(
-        default="http://localhost:11434",
-        description="Ollama API基础URL"
-    )
-    temperature: float = Field(
-        default=0.7,
-        description="生成温度",
-        ge=0.0,
-        le=1.0
-    )
-    max_tokens: int = Field(
-        default=1024,
-        description="最大生成长度",
-        gt=0
-    )
+# 默认配置
+DEFAULT_PROVIDER = api_config.default_provider
+DEFAULT_MODEL = api_config.ollama["model_name"]
+DEFAULT_BASE_URL = api_config.ollama["base_url"]
+TIMEOUT = 60
 
 
-class OllamaLLM(LLM):
-    """自定义Ollama LLM类"""
-    
-    config: OllamaConfig = Field(default_factory=OllamaConfig)
-    
-    def __init__(
-        self,
-        model_name: str = "deepseek-r1:8b",
-        base_url: str = "http://localhost:11434",
-        temperature: float = 0.7,
-        max_tokens: int = 1024
-    ):
-        """初始化"""
-        config = OllamaConfig(
-            model_name=model_name,
-            base_url=base_url,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-        super().__init__(config=config)
+def create_llm(provider: str = None, **kwargs) -> LLM:
+    """创建LLM实例"""
+    # 如果没有指定provider，从用户设置中获取
+    if not provider:
+        settings = get_user_settings()
+        provider = settings.get("default_provider", "ollama")
+    config = get_provider_config(provider)
+    print(config)
+    if not config and provider != "ollama":
+        raise ValueError(f"未找到{provider}的配置信息")
+    print(provider)
+    if provider == "ollama":
+        from .tools.ollama_service import OllamaLLM
+        return OllamaLLM(**{**config, **kwargs})
+    elif provider == "deepseek":
+        return DeepSeekLLM(**{**config, **kwargs})
+    elif provider == "openai":
+        return OpenAILLM(**{**config, **kwargs})
+    elif provider == "openrouter":
+        return OpenRouterLLM(**{**config, **kwargs})
+    else:
+        raise ValueError(f"不支持的LLM提供商: {provider}")
 
-    @property
-    def _llm_type(self) -> str:
-        """返回LLM类型"""
-        return "ollama"
 
-    @property
-    def _identifying_params(self) -> Dict[str, Any]:
-        """返回标识参数"""
-        return {
-            "model_name": self.config.model_name,
-            "base_url": self.config.base_url,
-            "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens
-        }
-
-    async def _call(
-        self,
-        prompt: str,
-        **kwargs: Any
-    ) -> AsyncGenerator[str, None]:
-        """调用Ollama API生成文本，支持流式输出"""
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.config.base_url}/api/generate"
-            headers = {"Content-Type": "application/json"}
-            
-            payload = {
-                "model": self.config.model_name,
-                "prompt": prompt,
-                "stream": True,
-                "options": {
-                    "temperature": self.config.temperature,
-                    # "num_predict": self.config.max_tokens,
-                }
-            }
-            
-            print(f"发送请求: {url}")
-            print(f"使用模型: {payload['model']}")
-
-            async with session.post(
-                url,
-                json=payload,
-                headers=headers
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise ValueError(
-                        f"API错误 ({response.status}): {error_text}"
-                    )
-
-                async for line in response.content:
-                    if not line:
-                        continue
-                        
-                    text = line.decode('utf-8')
-                    if text == "":
-                        continue
-                        
-                    try:
-                        data = json.loads(text)
-                        if "error" in data:
-                            raise RuntimeError(data["error"])
-                        if "response" in data:
-                            # 直接返回原始响应
-                            response = data["response"]
-                            if response != "":  # 仅用于检查非空
-                                yield response  # 返回完整响应，包含换行符
-                    except json.JSONDecodeError:
-                        print(f"无效响应: {text[:100]}")
-                        continue
 
 
 class ContentGenerator:
@@ -135,18 +60,23 @@ class ContentGenerator:
 
     def __init__(
         self,
-        model_name: str = "deepseek-r1:8b",
-        base_url: str = "http://localhost:11434",
-        temperature: float = 0.7,
-        max_tokens: int = 1024
+        provider: str = None,
+        **kwargs
     ):
         """初始化"""
-        self.llm = OllamaLLM(
-            model_name=model_name,
-            base_url=base_url,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
+        # 从用户设置中获取provider和model_name
+        settings = get_user_settings()
+        if not provider:
+            provider = settings.get("default_provider", DEFAULT_PROVIDER)
+        
+        # 获取当前provider的配置
+        provider_config = get_provider_config(provider)
+        if provider_config and "model_name" in provider_config:
+            kwargs["model_name"] = provider_config["model_name"]
+            
+        self.llm = create_llm(provider, **kwargs)
+        # 保存LLM的配置信息
+        self.config = self.llm.config
 
     async def process_message(
         self,
@@ -155,51 +85,13 @@ class ContentGenerator:
         model: Optional[str] = None
     ) -> AsyncGenerator[str, None]:
         """处理用户消息并生成内容"""
-        # 如果指定了模型，更新LLM配置
-        if model:
-            self.llm.config.model_name = model
-            print(f"使用模型: {model}")
+        # 使用当前加载的模型配置
+        current_model = api_config.get_model_name()
+        if current_model:
+            self.llm.config.model_name = current_model
+            print(f"使用模型: {current_model}")
 
         print(f"开始处理会话 {session_id} 的消息")
-
-        # 检查Ollama服务是否可用
-        try:
-            async with aiohttp.ClientSession() as session:
-                try:
-                    async with session.get(
-                        f"{self.llm.config.base_url}/api/version",
-                        timeout=5
-                    ) as response:
-                        if response.status != 200:
-                            try:
-                                error_body = await response.json()
-                                error_msg = error_body.get(
-                                    'error', '服务响应异常'
-                                )
-                            except (json.JSONDecodeError, aiohttp.ClientError):
-                                error_msg = (
-                                    await response.text() or 
-                                    f"HTTP {response.status}"
-                                )
-                            raise RuntimeError(f"Ollama异常: {error_msg}")
-                            
-                        version_info = await response.json()
-                        version = version_info.get('version', 'unknown')
-                        print(f"Ollama版本: {version}")
-                except aiohttp.ClientError as e:
-                    raise RuntimeError(f"无法连接Ollama: {e}")
-                except asyncio.TimeoutError:
-                    raise RuntimeError("连接Ollama超时")
-                    
-        except Exception as e:
-            error = str(e)
-            print(f"\n错误：{error}")
-            yield "\n❌ Ollama服务检查失败"
-            if "无法连接" in error or "超时" in error:
-                yield "\n💡 提示：请检查服务是否已启动"
-            elif "异常" in error:
-                yield "\n💡 提示：服务可能需要重启"
-            return
 
         # 开始渐进式生成
         try:

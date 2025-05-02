@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import traceback
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional,List
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -330,19 +330,25 @@ async def get_knowledge_graph(topic: str, model: str = DEFAULT_MODEL):
 async def list_models():
     """获取所有可用的AI模型列表"""
     try:
-        # 获取内置模型
-        built_in_models = []
-
-        # 获取Ollama模型
-        ollama_models = await ollama_service.list_models()
-
-        # 合并所有模型列表
-        all_models = built_in_models + ollama_models
+        # 获取用户设置
+        settings = get_user_settings()
+        provider = settings.get("default_provider", "ollama")
+        
+        models = []
+        
+        # 根据当前提供商获取模型列表
+        if provider == "ollama":
+            # 获取Ollama模型
+            models = await ollama_service.list_models()
+        else:
+            # 从用户设置中获取其他提供商的模型列表
+            provider_config = settings.get(provider, {})
+            models = provider_config.get("models", [])
 
         return ResponseModel(
             success=True,
             message="获取模型列表成功",
-            data=all_models
+            data=models
         )
     except Exception as e:
         raise HTTPException(

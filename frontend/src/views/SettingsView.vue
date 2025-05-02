@@ -17,13 +17,53 @@
 
       <div class="settings-section">
         <h2>{{ t('AI模型') }}</h2>
+        <div class="setting-item">
+          <label>
+            {{ t('LLM提供商') }}
+            <select v-model="pendingSettings.default_provider" @change="handleProviderChange">
+              <option value="ollama">Ollama (本地)</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai">OpenAI</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+          </label>
+        </div>
+        
+        <div class="setting-item" v-if="pendingSettings.default_provider !== 'ollama'">
+          <label>
+            {{ t('API密钥') }}
+            <div class="api-key-input-container">
+              <input 
+                type="password" 
+                v-model="providerConfig.api_key"
+                :placeholder="t('请输入API密钥')"
+                @input="handleApiKeyChange"
+              >
+              <div class="api-key-error" v-if="pendingSettings.default_provider === 'openai' && !providerConfig.api_key">
+                {{ t('请输入OpenAI API密钥以加载可用模型') }}
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <label>
+            {{ t('API地址') }}
+            <input 
+              type="text" 
+              v-model="providerConfig.base_url"
+              :placeholder="t('请输入API地址')"
+            >
+          </label>
+        </div>
+
         <div class="model-list">
           <div v-for="model in availableModels" :key="model.id" class="model-item">
             <label class="model-label">
               <input
                 type="radio"
                 :value="model.id"
-                v-model="pendingSettings.default_model"
+                v-model="providerConfig.model_name"
                 name="model"
               >
               <div class="model-info">
@@ -33,6 +73,32 @@
               </div>
             </label>
           </div>
+        </div>
+
+        <div class="setting-item">
+          <label>
+            {{ t('温度') }}
+            <input 
+              type="range" 
+              v-model.number="providerConfig.temperature"
+              min="0" 
+              max="1" 
+              step="0.1"
+            >
+            <span class="value-display">{{ providerConfig.temperature }}</span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <label>
+            {{ t('最大Token数') }}
+            <input 
+              type="number" 
+              v-model.number="providerConfig.max_tokens"
+              min="1" 
+              max="8192"
+            >
+          </label>
         </div>
       </div>
 
@@ -88,7 +154,12 @@ const translations = {
     '跟随系统': '跟随系统',
     '语言': '语言',
     '设置保存成功！': '设置保存成功！',
-    '保存设置失败：': '保存设置失败：'
+    '保存设置失败：': '保存设置失败：',
+    '请输入OpenAI API密钥以加载可用模型': '请输入OpenAI API密钥以加载可用模型',
+    '请输入API密钥': '请输入API密钥',
+    '获取模型列表失败': '获取模型列表失败',
+    '无效的API响应格式': '无效的API响应格式',
+    '加载模型列表时出错：': '加载模型列表时出错：'
   },
   'en-US': {
     '设置': 'Settings',
@@ -104,7 +175,12 @@ const translations = {
     '跟随系统': 'System',
     '语言': 'Language',
     '设置保存成功！': 'Settings saved successfully!',
-    '保存设置失败：': 'Failed to save settings: '
+    '保存设置失败：': 'Failed to save settings: ',
+    '请输入OpenAI API密钥以加载可用模型': 'Please enter OpenAI API key to load available models',
+    '请输入API密钥': 'Please enter API key',
+    '获取模型列表失败': 'Failed to fetch model list',
+    '无效的API响应格式': 'Invalid API response format',
+    '加载模型列表时出错：': 'Error loading model list: '
   }
 }
 
@@ -113,24 +189,89 @@ const t = (key) => translations[currentLanguage.value]?.[key] || key
 
 const availableModels = ref([])
 const pendingSettings = ref({
-  default_model: '',
+  default_provider: 'ollama',
   theme: 'light',
   language: 'zh-CN'
 })
+
+const providerConfig = ref({
+  api_key: '',
+  base_url: 'http://localhost:11434',
+  model_name: 'deepseek-r1:8b',
+  temperature: 0.7,
+  max_tokens: 1024
+})
+
 const isRefreshing = ref(false)
 const isSaving = ref(false)
 
 const loadModels = async () => {
   try {
-    const response = await fetch('/api/models')
-    const result = await response.json()
-    if (result.success) {
-      availableModels.value = result.data
+    const provider = pendingSettings.value.default_provider
+    let models = []
+    
+    if (provider === 'ollama') {
+      const ollamaResponse = await fetch('http://localhost:11434/api/tags')
+      const ollamaData = await ollamaResponse.json()
+      models = ollamaData.models.map(model => ({
+        id: model.name,
+        name: model.name.charAt(0).toUpperCase() + model.name.slice(1),
+        type: 'Chat',
+        description: `${model.name} ${model.size} 本地模型`
+      }))
+    } else if (provider === 'openrouter') {
+      // 从OpenRouter API获取模型列表
+      const response = await fetch('https://openrouter.ai/api/v1/models', {
+        headers: {
+          'HTTP-Referer': 'https://github.com/OpenRouterTeam/openrouter-python',
+          'X-Title': 'AI Education Frontend',
+          'Authorization': `Bearer ${providerConfig.value.api_key}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || '获取模型列表失败')
+      }
+      if (!data.data || !Array.isArray(data.data)) {
+        throw new Error('无效的API响应格式')
+      }
+      models = data.data.map(model => ({
+        id: model.id,
+        name: model.name,
+        type: 'Chat',
+        description: model.description || `OpenRouter - ${model.name}`
+      }))
+    } else if (provider === 'openai') {
+      // 从OpenAI API获取模型列表
+      const response = await fetch(`${providerConfig.value.base_url}/models`, {
+        headers: {
+          'Authorization': `Bearer ${providerConfig.value.api_key}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error?.message || '获取模型列表失败')
+      }
+      models = data.data
+        .filter(model => model.id.includes('gpt'))
+        .map(model => ({
+          id: model.id,
+          name: model.id,
+          type: 'Chat',
+          description: `OpenAI - ${model.id}`
+        }))
     } else {
-      console.error('Failed to load models:', result.message)
+      // 其他提供商使用默认配置中的模型列表
+      models = defaultConfigs[provider]?.models || []
     }
+    
+    availableModels.value = models
   } catch (error) {
     console.error('Error loading models:', error)
+    // 加载失败时使用默认配置
+    availableModels.value = defaultConfigs[pendingSettings.value.default_provider]?.models || []
   }
 }
 
@@ -139,11 +280,23 @@ const loadSettings = async () => {
     const response = await fetch('/api/settings')
     const result = await response.json()
     if (result.success) {
+      // 保持当前提供商不变
+      const currentProvider = pendingSettings.value.default_provider
       pendingSettings.value = {
-        default_model: result.data.default_model,
+        default_provider: currentProvider || result.data.default_provider || 'ollama',
         theme: result.data.theme,
         language: result.data.language
       }
+      
+      const config = result.data[pendingSettings.value.default_provider] || {}
+      providerConfig.value = {
+        api_key: config.api_key || '',
+        base_url: config.base_url || 'http://localhost:11434',
+        model_name: config.model_name || 'deepseek-r1:8b',
+        temperature: config.temperature || 0.7,
+        max_tokens: config.max_tokens || -1
+      }
+      
       currentLanguage.value = result.data.language
       handleThemeChange()
     } else {
@@ -164,9 +317,87 @@ const handleLanguageChange = () => {
   eventBus.emit(Events.LANGUAGE_CHANGE, pendingSettings.value.language)
 }
 
+const defaultConfigs = {
+  ollama: {
+    api_key: '',
+    base_url: 'http://localhost:11434',
+    model_name: 'deepseek-r1:8b',
+    temperature: 0.7,
+    max_tokens: -1,
+    models: [] // 将通过API动态获取
+  },
+  openai: {
+    api_key: '',
+    base_url: 'https://api.openai.com/v1',
+    model_name: 'gpt-3.5-turbo',
+    temperature: 0.7,
+    max_tokens: -1,
+    models: []
+  },
+  deepseek: {
+    api_key: '',
+    base_url: 'https://api.deepseek.com/v1',
+    model_name: 'deepseek-chat',
+    temperature: 0.7,
+    max_tokens: -1,
+    models: [
+      { id: 'deepseek-chat', name: 'DeepSeek Chat', type: 'Chat', description: 'DeepSeek通用聊天模型' },
+      { id: 'deepseek-coder', name: 'DeepSeek Coder', type: 'Code', description: 'DeepSeek专业代码模型' }
+    ]
+  },
+  openai: {
+    api_key: '',
+    base_url: 'https://api.openai-proxy.com/v1', // 使用代理地址
+    model_name: 'gpt-3.5-turbo',
+    temperature: 0.7,
+    max_tokens: -1,
+    models: [] // 将通过API动态获取
+  },
+  openrouter: {
+    api_key: '',
+    base_url: 'https://openrouter.ai/api/v1',
+    model_name: 'openai/gpt-3.5-turbo',
+    temperature: 0.7,
+    max_tokens: -1,
+    models: [] // 将通过API动态获取
+  }
+}
+
+const handleProviderChange = async () => {
+  // 重置当前提供商的配置
+  const config = defaultConfigs[pendingSettings.value.default_provider]
+  providerConfig.value = { ...config }
+  
+  // 如果是OpenAI且没有API密钥，则不加载模型
+  if (pendingSettings.value.default_provider === 'openai' && !providerConfig.value.api_key) {
+    availableModels.value = []
+    return
+  }
+  
+  // 加载新提供商的模型列表
+  await loadModels()
+}
+
+const handleApiKeyChange = async () => {
+  if (pendingSettings.value.default_provider === 'openai' && providerConfig.value.api_key) {
+    await loadModels()
+  }
+}
+
+
 const saveAllSettings = async () => {
   isSaving.value = true
   try {
+    // 保存所有提供商的配置
+    const settings = {
+      ...pendingSettings.value,
+      ollama: defaultConfigs.ollama,
+      deepseek: defaultConfigs.deepseek,
+      openai: defaultConfigs.openai,
+      openrouter: defaultConfigs.openrouter,
+      [pendingSettings.value.default_provider]: providerConfig.value // 当前提供商的配置覆盖默认配置
+    }
+    
     const response = await fetch('/api/settings', {
       method: 'POST',
       headers: {
@@ -174,13 +405,13 @@ const saveAllSettings = async () => {
       },
       body: JSON.stringify({
         user_id: 'global',
-        preferences: pendingSettings.value
+        preferences: settings
       })
     })
     const result = await response.json()
     if (result.success) {
       alert(t('设置保存成功！'))
-      eventBus.emit(Events.SETTINGS_UPDATED, pendingSettings.value)
+      eventBus.emit(Events.SETTINGS_UPDATED, settings)
     } else {
       throw new Error(result.message)
     }
@@ -195,10 +426,10 @@ const saveAllSettings = async () => {
 const refreshSettings = async () => {
   isRefreshing.value = true
   try {
-    await Promise.all([
-      loadModels(),
-      loadSettings()
-    ])
+    // 先加载设置，保持当前提供商不变
+    await loadSettings()
+    // 然后加载当前提供商的模型列表
+    await loadModels()
   } catch (error) {
     console.error('Error refreshing settings:', error)
   } finally {
@@ -308,6 +539,7 @@ onActivated(refreshSettings)
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  margin-bottom: 1rem; /* 在下面添加空行 */
 }
 
 .model-item {
@@ -373,31 +605,72 @@ onActivated(refreshSettings)
 .setting-item label {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   font-weight: 500;
   color: var(--text-color);
 }
 
-.setting-item select {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-color);
-  font-size: 0.875rem;
-  color: var(--text-color);
-  min-width: 140px;
-  cursor: pointer;
-  transition: all 0.2s;
+.api-key-input-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 200px;
 }
 
-.setting-item select:hover {
+.api-key-error {
+  color: var(--error-color);
+  font-size: 0.75rem;
+  line-height: 1.2;
+  margin-top: 0.25rem;
+}
+
+.setting-item select,
+.setting-item input[type="text"],
+.setting-item input[type="password"],
+.setting-item input[type="number"] {
+  width: 200px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 14px;
+}
+
+.setting-item select,
+.setting-item input[type="text"],
+.setting-item input[type="password"],
+.setting-item input[type="number"] {
+  cursor: pointer;
+}
+
+.setting-item select:hover,
+.setting-item input[type="text"]:hover,
+.setting-item input[type="password"]:hover,
+.setting-item input[type="number"]:hover {
   border-color: var(--primary-color);
 }
 
-.setting-item select:focus {
+.setting-item select:focus,
+.setting-item input[type="text"]:focus,
+.setting-item input[type="password"]:focus,
+.setting-item input[type="number"]:focus {
   outline: none;
   border-color: var(--primary-color);
-  box-shadow: 0 0 0 2px rgba(16, 163, 127, 0.1);
+  box-shadow: 0 0 0 2px var(--primary-color-light);
+}
+
+.setting-item input[type="range"] {
+  width: 160px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.setting-item .value-display {
+  display: inline-block;
+  min-width: 32px;
+  text-align: right;
+  color: var(--text-color-light);
 }
 
 /* 响应式布局 */

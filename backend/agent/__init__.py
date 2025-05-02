@@ -8,8 +8,8 @@ AI教育助手agent模块
 - 错误处理
 """
 
+from .tools.ollama_service import OllamaLLM
 from .langchain_agent import (
-    OllamaLLM,
     ContentGenerator,
     langchain_agent
 )

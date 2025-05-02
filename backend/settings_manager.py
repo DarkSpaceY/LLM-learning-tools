@@ -15,7 +15,7 @@ class SettingsManager:
             "user_settings.json"
         )
         self.default_settings = {
-            "default_model": "gpt-3.5",
+            "default_provider": "openai",
             "theme": "light",
             "language": "zh-CN"
         }
