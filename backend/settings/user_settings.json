@@ -41,7 +41,7 @@
       "models": []
     },
     "openrouter": {
-      "api_key": "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",
+      "api_key": "",
       "base_url": "https://openrouter.ai/api/v1",
       "model_name": "qwen/qwen3-235b-a22b",
       "temperature": 0.7,
