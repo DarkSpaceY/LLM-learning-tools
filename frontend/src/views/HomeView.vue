@@ -129,7 +129,7 @@ let eventSource = null
 
 // 状态管理
 const userQuestion = ref('')        // 用户问题
-const currentMessage = ref('')      // 当前流式输出内容
+const currentMessage = ref('')
 const currentStage = ref('')        // 当前阶段
 const currentProgress = ref(0)      // 当前进度
 const progressStatus = ref('')      // 进度状态
@@ -144,7 +144,6 @@ const defaultProps = {
 // 内容查看相关
 const contentDialogVisible = ref(false)
 const selectedSection = ref(null)
-
 // 根据数据类型添加到树形结构
 const addToTree = (data) => {
   if (data.type === 'chapter') {
@@ -293,14 +292,6 @@ const splitThinkingBlocks = (content) => {
 // 控制是否显示思考过程
 const showThinking = ref(true)
 
-// 滚动到底部
-const scrollToBottom = () => {
-  setTimeout(() => {
-    if (messageContainer.value) {
-      messageContainer.value.scrollTop = messageContainer.value.scrollHeight
-    }
-  }, 100)
-}
 
 // 清理EventSource
 const cleanupEventSource = () => {
@@ -518,7 +509,6 @@ const stageToText = (stage) => {
 }
 
 onMounted(() => {
-  currentMessage.value = t('👋 你好！我是你的AI学习助手。请告诉我你想学习的主题，我会为你规划详细的学习路径。')
 })
 
 onUnmounted(() => {

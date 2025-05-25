@@ -30,10 +30,8 @@ from agent.tools.knowledge_graph_manager import (  # noqa: E402
     KnowledgeGraphManager
 )
 from agent.tools.tutorial_manager import TutorialManager  # noqa: E402
-from agent.tools.knowledge_point_parser import KnowledgePointParser  # noqa: E402
 from agent.tools.exercise_generator import ExerciseGenerator  # noqa: E402
 from agent.tools.resource_searcher import ResourceSearcher  # noqa: E402
-from agent.tools.learning_plan_generator import LearningPlanGenerator  # noqa: E402
 from agent.tools.concept_analyzer import ConceptAnalyzer  # noqa: E402
 from agent.tools.simulation_builder import SimulationBuilder  # noqa: E402
 
@@ -41,10 +39,8 @@ from agent.tools.simulation_builder import SimulationBuilder  # noqa: E402
 knowledge_graph_generator = KnowledgeGraphGenerator(langchain_agent.llm)
 knowledge_graph_manager = KnowledgeGraphManager()
 tutorial_manager = TutorialManager()
-knowledge_point_parser = KnowledgePointParser(langchain_agent.llm)
 exercise_generator = ExerciseGenerator(langchain_agent.llm)
 resource_searcher = ResourceSearcher(langchain_agent.llm)
-learning_plan_generator = LearningPlanGenerator(langchain_agent.llm)
 concept_analyzer = ConceptAnalyzer(langchain_agent.llm)
 simulation_builder = SimulationBuilder(langchain_agent.llm)
 
@@ -114,14 +110,6 @@ class ResourceRequest(BaseModel):
     query: str
     types: List[str] = []  # 支持多个资源类型
     difficulty: int = 0
-    model: str = DEFAULT_MODEL
-
-
-class LearningPlanRequest(BaseModel):
-    user_id: str
-    knowledge_points: List[str]
-    duration_days: int
-    user_level: int
     model: str = DEFAULT_MODEL
 
 
@@ -681,26 +669,6 @@ async def expand_knowledge_node(request: Request):
         )
 
 
-# 知识点解析相关路由
-@app.post("/api/knowledge_point/parse", response_model=ResponseModel)
-@with_retry()
-async def parse_knowledge_point(request: KnowledgePointRequest):
-    """解析知识点"""
-    try:
-        knowledge_point = await knowledge_point_parser.parse_knowledge_point(request.content)
-        print(f"解析后的知识点：{knowledge_point}")
-        return ResponseModel(
-            success=True,
-            message="解析知识点成功",
-            data=knowledge_point
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"解析知识点失败：{str(e)}"
-        )
-
-
 # 练习题生成相关路由
 @app.post("/api/exercises/generate", response_model=ResponseModel)
 async def generate_exercises(request: ExerciseRequest):
@@ -753,31 +721,6 @@ async def search_resources(request: ResourceRequest):
             status_code=500,
             detail=f"搜索资源失败：{str(e)}"
         )
-
-
-# 学习计划生成相关路由
-@app.post("/api/learning_plan/generate", response_model=ResponseModel)
-@with_retry()
-async def generate_learning_plan(request: LearningPlanRequest):
-    """生成学习计划"""
-    try:
-        plan = await learning_plan_generator.generate_plan(
-            request.user_id,
-            request.knowledge_points,
-            request.duration_days,
-            request.user_level
-        )
-        return ResponseModel(
-            success=True,
-            message="生成学习计划成功",
-            data=plan.dict()
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"生成学习计划失败：{str(e)}"
-        )
-
 
 # 概念分析相关路由
 @app.post("/api/concept/analyze", response_model=ResponseModel)

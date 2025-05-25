@@ -281,14 +281,7 @@ const initGraph = () => {
       show: false
     },
     legend: {
-      show: true,
-      orient: 'vertical',
-      right: 10,
-      top: 'center',
-      data: ['概念', '方法', '原理', '应用'].map(name => ({
-        name,
-        icon: 'circle'
-      }))
+      show: false
     },
     tooltip: {
       trigger: 'item',

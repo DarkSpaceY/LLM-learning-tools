@@ -1,6 +1,6 @@
 {
   "global": {
-    "default_provider": "openrouter",
+    "default_provider": "ollama",
     "theme": "light",
     "language": "zh-CN",
     "ollama": {
@@ -8,8 +8,7 @@
       "base_url": "http://localhost:11434",
       "model_name": "deepseek-r1:8b",
       "temperature": 0.7,
-      "max_tokens": -1,
-      "models": []
+      "max_tokens": -1
     },
     "deepseek": {
       "api_key": "",
@@ -43,9 +42,10 @@
     "openrouter": {
       "api_key": "",
       "base_url": "https://openrouter.ai/api/v1",
-      "model_name": "qwen/qwen3-235b-a22b:free",
+      "model_name": "openai/gpt-3.5-turbo",
       "temperature": 0.7,
-      "max_tokens": -1
+      "max_tokens": -1,
+      "models": []
     }
   }
 }

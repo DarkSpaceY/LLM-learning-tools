@@ -36,15 +36,6 @@ const router = createRouter({
       }
     },
     {
-      path: '/tools/knowledge-parser',
-      name: 'knowledge-parser',
-      component: () => import('../views/tools/KnowledgeParserView.vue'),
-      meta: {
-        title: '知识点解析器',
-        icon: 'fas fa-brain'
-      }
-    },
-    {
       path: '/tools/exercise',
       name: 'exercise',
       component: () => import('../views/tools/ExerciseGeneratorView.vue'),
@@ -60,15 +51,6 @@ const router = createRouter({
       meta: {
         title: '学习资源搜索器',
         icon: 'fas fa-search-plus'
-      }
-    },
-    {
-      path: '/tools/plan',
-      name: 'plan',
-      component: () => import('../views/tools/LearningPlannerView.vue'),
-      meta: {
-        title: '学习计划生成器',
-        icon: 'fas fa-calendar-alt'
       }
     },
     {

@@ -67,14 +67,6 @@ const categories = [
 // 工具列表数据
 const tools = [
   {
-    id: 'knowledge-point-parser',
-    name: '知识点解析器',
-    description: '解析文本中的关键知识点，标注重要程度和难度',
-    category: 'analysis',
-    icon: 'fas fa-brain',
-    route: '/tools/knowledge-parser'
-  },
-  {
     id: 'exercise-generator',
     name: '练习题生成器',
     description: '根据主题智能生成各类型练习题，包含详细解析',
@@ -89,14 +81,6 @@ const tools = [
     category: 'learning',
     icon: 'fas fa-search-plus',
     route: '/tools/resource'
-  },
-  {
-    id: 'learning-planner',
-    name: '学习计划生成器',
-    description: '制定个性化学习计划，合理安排学习进度',
-    category: 'learning',
-    icon: 'fas fa-calendar-alt',
-    route: '/tools/plan'
   },
   {
     id: 'concept-analyzer',

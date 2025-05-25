@@ -21,7 +21,7 @@
           <label>
             {{ t('LLM提供商') }}
             <select v-model="pendingSettings.default_provider" @change="handleProviderChange">
-              <option value="ollama">Ollama (本地)</option>
+              <option value="ollama">Ollama</option>
               <option value="deepseek">DeepSeek</option>
               <option value="openai">OpenAI</option>
               <option value="openrouter">OpenRouter</option>
@@ -186,7 +186,14 @@ const translations = {
     '请输入API密钥': '请输入API密钥',
     '获取模型列表失败': '获取模型列表失败',
     '无效的API响应格式': '无效的API响应格式',
-    '加载模型列表时出错：': '加载模型列表时出错：'
+    '加载模型列表时出错：': '加载模型列表时出错：',
+    'LLM提供商': 'LLM提供商',
+    'API密钥': 'API密钥',
+    'API地址': 'API地址',
+    '请输入API地址': '请输入API地址',
+    '搜索模型': '搜索模型',
+    '温度': '温度',
+    '最大Token数': '最大Token数'
   },
   'en-US': {
     '设置': 'Settings',
@@ -207,7 +214,14 @@ const translations = {
     '请输入API密钥': 'Please enter API key',
     '获取模型列表失败': 'Failed to fetch model list',
     '无效的API响应格式': 'Invalid API response format',
-    '加载模型列表时出错：': 'Error loading model list: '
+    '加载模型列表时出错：': 'Error loading model list: ',
+    'LLM提供商': 'LLM Provider',
+    'API密钥': 'API Key',
+    'API地址': 'API Endpoint',
+    '请输入API地址': 'Please enter API endpoint',
+    '搜索模型': 'Search models',
+    '温度': 'Temperature',
+    '最大Token数': 'Max Tokens'
   }
 }
 
