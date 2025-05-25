@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 from pydantic import BaseModel
 from langchain.llms.base import BaseLLM
 
@@ -6,215 +6,252 @@ class SimulationComponent(BaseModel):
     """仿真组件数据模型"""
     id: str
     name: str
-    type: str  # 组件类型
+    code: str  # 组件的前端代码
     properties: Dict[str, Any]  # 组件属性
-    state: Dict[str, Any]  # 组件状态
-    connections: List[str]  # 与其他组件的连接
 
 class SimulationEnvironment(BaseModel):
     """仿真环境数据模型"""
-    id: str
+    id_: str
     title: str
     description: str
-    components: List[SimulationComponent]
-    initial_state: Dict[str, Any]
-    current_state: Dict[str, Any]
+    code: str  # 整体仿真环境的前端代码
     parameters: Dict[str, Any]  # 环境参数
-    metadata: Dict[str, Any]  # 元数据
 
 class SimulationBuilder:
     """仿真构建器"""
     def __init__(self, llm: BaseLLM):
         self.llm = llm
 
-    async def create_simulation(self, topic: str, complexity: int) -> SimulationEnvironment:
+    async def create_simulation(self, topic: str) -> SimulationEnvironment:
         """创建仿真环境"""
-        prompt = f"""请为以下主题创建一个仿真环境：
-        主题：{topic}
-        复杂度：{complexity}（1-5）
+        prompt = f"""请为以下主题创建一个基于HTML5 Canvas的仿真环境：
+        主题：{topic}"""+"""
         
-        请设计适当的组件和参数。
+        代码结构要求：
+        1. HTML结构必须包含：
+           - 完整的DOCTYPE和meta标签
+           - Canvas元素（设置合适的宽高）
+           - 必要的容器和控制元素
+           必须包含以下标签和元素：
+           - <!DOCTYPE html>
+           - <html>
+           - <head>
+           - <meta charset>
+           - <title>
+           - <body>
+        
+        2. CSS要求：
+           - 使用模块化的样式组织
+           - 响应式布局适配
+           - 统一的颜色和字体风格
+        
+        3. JavaScript代码规范：
+           - 使用ES6+语法，必须包含：
+             * const 和 let 声明
+             * 函数定义
+             * 事件监听器
+             * requestAnimationFrame
+           - 采用模块化设计模式
+           - 实现完整的生命周期管理
+           - 清晰的事件处理机制
+        
+        4. Canvas绘制规范：
+           - 使用requestAnimationFrame实现动画
+           - 实现基本的碰撞检测
+           - 合理使用Canvas状态栈
+           - 优化绘制性能
+           必须包含以下Canvas设置：
+           - getContext('2d')
+           - canvas.width
+           - canvas.height
+        
+        5. 交互功能要求：
+           - 必须实现以下至少一种事件响应：
+             * click
+             * mousemove
+             * mousedown
+             * mouseup
+           - 添加基本的UI控制元素
+           - 支持参数调节和状态重置
+        
+        6. 代码注释和文档：
+           - 添加完整的函数文档注释
+           - 关键算法和逻辑说明
+           - 使用示例和参数说明
+        
+        7. 代码安全要求：
+           - 禁止使用以下危险特性：
+             * document.write()
+             * eval()
+             * innerHTML 直接赋值
+        
+        示例代码结构：
+        ```html
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>仿真环境</title>
+            <style>
+                /* 样式定义 */
+            </style>
+        </head>
+        <body>
+            <canvas id="simulationCanvas"></canvas>
+            <div class="controls">
+                <!-- 控制元素 -->
+            </div>
+            <script>
+                // 初始化代码
+                const canvas = document.getElementById('simulationCanvas');
+                const ctx = canvas.getContext('2d');
+                
+                // 状态管理
+                let state = {
+                    // 仿真状态变量
+                };
+                
+                // 动画循环
+                function animate() {
+                    requestAnimationFrame(animate);
+                    // 更新和绘制逻辑
+                }
+                
+                // 事件处理
+                canvas.addEventListener('click', (e) => {
+                    // 交互逻辑
+                });
+                
+                // 启动仿真
+                animate();
+            </script>
+        </body>
+        </html>
+        ```
+        
+        请基于以上要求和示例，生成完整的仿真环境代码：
         """
         
         try:
-            response = await self.llm.agenerate([prompt])
-            result = response.generations[0][0].text
-            
-            # 创建基础组件
-            components = [
-                SimulationComponent(
-                    id=f"comp_{i}",
-                    name=f"Component {i}",
-                    type="basic",
-                    properties={},
-                    state={"active": True},
-                    connections=[]
-                ) for i in range(3)  # 示例：创建3个基础组件
-            ]
-            
+            # 生成主要的仿真代码
+            print(prompt)
+            output = []
+            async for chunk in self.llm._call(prompt):
+                output.append(chunk)
+                print(chunk,end="")
+            simulation_code = ''.join(output)
+            # 提取HTML代码块
+            simulation_code = self._extract_code_block(simulation_code, 'html')
+            # 验证代码的基本结构
+            print(simulation_code)
+            print(self._validate_code(simulation_code))
+            if not self._validate_code(simulation_code):
+                raise ValueError("生成的代码结构不完整或存在错误")
+                
             # 创建仿真环境
-            simulation = SimulationEnvironment(
-                id=f"sim_{topic.lower().replace(' ', '_')}",
-                title=f"{topic} Simulation",
-                description=f"A simulation environment for {topic}",
-                components=components,
-                initial_state={"started": False},
-                current_state={"started": False},
-                parameters={"complexity": complexity},
-                metadata={"created_at": "timestamp"}
-            )
-            
-            return simulation
+            try:
+                simulation = SimulationEnvironment(
+                    id_=f"sim_{topic.lower().replace(' ', '_')}",
+                    title=f"Simulation: {topic}",  # 添加主题到标题
+                    description=f"A simulation environment for {topic}",
+                    code=simulation_code,
+                    parameters={}
+                )
+                print(simulation)
+                return simulation
+            except Exception as e:
+                raise ValueError(f"创建SimulationEnvironment实例失败: {str(e)}")
         except Exception as e:
             raise ValueError(f"创建仿真环境失败：{str(e)}")
-
-    async def add_component(self, simulation: SimulationEnvironment, component_type: str, properties: Dict[str, Any]) -> SimulationComponent:
-        """添加仿真组件"""
-        prompt = f"""请为仿真环境添加新组件：
-        仿真环境：{simulation.title}
-        组件类型：{component_type}
-        组件属性：{properties}
+    
+    def _extract_code_block(self, text: str, language: str = None) -> str:
+        """从文本中提取代码块
         
-        请设计组件的行为和连接。
+        Args:
+            text: 包含代码块的文本字符串
+            language: 代码块的语言标识（可选）
+            
+        Returns:
+            str: 提取到的代码内容，如果没有找到则返回原文本
         """
+        import re
         
-        try:
-            response = await self.llm.agenerate([prompt])
-            result = response.generations[0][0].text
+        # 构建正则表达式模式
+        if language:
+            pattern = f"```{language}\\n([\\s\\S]*?)\\n```"
+        else:
+            pattern = "```([\\s\\S]*?)```"
             
-            # 创建新组件
-            component = SimulationComponent(
-                id=f"comp_{len(simulation.components)}",
-                name=f"New {component_type} Component",
-                type=component_type,
-                properties=properties,
-                state={"active": True},
-                connections=[]
-            )
-            
-            # 添加到仿真环境
-            simulation.components.append(component)
-            
-            return component
-        except Exception as e:
-            raise ValueError(f"添加组件失败：{str(e)}")
+        # 查找匹配的代码块
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip()
+        return text
 
-    async def update_simulation_state(self, simulation: SimulationEnvironment, new_state: Dict[str, Any]) -> Dict[str, Any]:
-        """更新仿真状态"""
-        try:
-            # 更新环境状态
-            simulation.current_state.update(new_state)
-            
-            # 更新组件状态
-            for component in simulation.components:
-                if component.id in new_state:
-                    component.state.update(new_state[component.id])
-            
-            return {
-                "simulation_id": simulation.id,
-                "previous_state": simulation.current_state.copy(),
-                "new_state": simulation.current_state,
-                "components_updated": len([c for c in simulation.components if c.id in new_state])
-            }
-        except Exception as e:
-            raise ValueError(f"更新仿真状态失败：{str(e)}")
-
-    async def run_simulation(self, simulation: SimulationEnvironment, steps: int) -> List[Dict[str, Any]]:
-        """运行仿真"""
-        results = []
+    def _validate_code(self, code: str) -> bool:
+        """验证生成的代码的完整性和必要元素
         
-        try:
-            for step in range(steps):
-                prompt = f"""请模拟仿真环境的下一步：
-                仿真环境：{simulation.title}
-                当前步骤：{step + 1}/{steps}
-                当前状态：{simulation.current_state}
-                
-                请计算下一个状态。
-                """
-                
-                response = await self.llm.agenerate([prompt])
-                result = response.generations[0][0].text
-                
-                # 更新仿真状态
-                new_state = {"step": step + 1, "timestamp": "current_time"}  # 示例状态
-                await self.update_simulation_state(simulation, new_state)
-                
-                # 记录结果
-                results.append({
-                    "step": step + 1,
-                    "state": simulation.current_state.copy(),
-                    "components": [
-                        {
-                            "id": c.id,
-                            "state": c.state.copy()
-                        } for c in simulation.components
-                    ]
-                })
+        Args:
+            code: 要验证的代码字符串
             
-            return results
-        except Exception as e:
-            raise ValueError(f"运行仿真失败：{str(e)}")
-
-    async def analyze_simulation_results(self, simulation: SimulationEnvironment, results: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """分析仿真结果"""
-        prompt = f"""请分析以下仿真结果：
-        仿真环境：{simulation.title}
-        结果数量：{len(results)}
-        初始状态：{results[0] if results else '无'}
-        最终状态：{results[-1] if results else '无'}
-        
-        请提供详细的分析报告。
+        Returns:
+            bool: 验证是否通过
         """
+        # HTML基本结构验证
+        html_elements = [
+            "<!DOCTYPE html>",
+            "<html",
+            "<head",
+            "<meta charset",
+            "<title",
+            "<body"
+        ]
         
-        try:
-            response = await self.llm.agenerate([prompt])
-            analysis = response.generations[0][0].text
-            
-            return {
-                "simulation_id": simulation.id,
-                "total_steps": len(results),
-                "analysis": analysis,
-                "statistics": {
-                    "start_time": results[0]["timestamp"] if results else None,
-                    "end_time": results[-1]["timestamp"] if results else None,
-                    "state_changes": len(results)
-                },
-                "key_findings": [],  # 关键发现
-                "recommendations": []  # 改进建议
-            }
-        except Exception as e:
-            raise ValueError(f"分析仿真结果失败：{str(e)}")
-
-    async def export_simulation(self, simulation: SimulationEnvironment, format: str = "json") -> Dict[str, Any]:
-        """导出仿真环境"""
-        try:
-            export_data = {
-                "metadata": {
-                    "id": simulation.id,
-                    "title": simulation.title,
-                    "description": simulation.description,
-                    "exported_at": "timestamp"
-                },
-                "configuration": {
-                    "parameters": simulation.parameters,
-                    "initial_state": simulation.initial_state
-                },
-                "components": [
-                    {
-                        "id": c.id,
-                        "name": c.name,
-                        "type": c.type,
-                        "properties": c.properties,
-                        "connections": c.connections
-                    } for c in simulation.components
-                ],
-                "state_history": {
-                    "initial": simulation.initial_state,
-                    "final": simulation.current_state
-                }
-            }
-            
-            return export_data
-        except Exception as e:
-            raise ValueError(f"导出仿真环境失败：{str(e)}")
+        # Canvas相关验证
+        canvas_elements = [
+            "<canvas",
+            "getContext('2d')",
+            "canvas.width",
+            "canvas.height"
+        ]
+        
+        # JavaScript基本功能验证
+        js_elements = [
+            "function",
+            "addEventListener",
+            "requestAnimationFrame",
+            "const",
+            "let"
+        ]
+        
+        # 事件处理验证
+        event_elements = [
+            "click",
+            "mousemove",
+            "mousedown",
+            "mouseup"
+        ]
+        
+        # 验证是否包含至少一个事件处理器
+        has_event_handler = any(event in code for event in event_elements)
+        
+        # 验证基本结构和功能
+        has_html_structure = all(element in code for element in html_elements)
+        has_canvas_setup = all(element in code for element in canvas_elements)
+        has_js_features = all(element in code for element in js_elements)
+        
+        # 验证是否包含错误的代码特征
+        error_patterns = [
+            "document.write(",  # 避免使用document.write
+            "eval(",          # 避免使用eval
+            "innerHTML ="      # 避免直接赋值innerHTML
+        ]
+        has_no_errors = not any(pattern in code for pattern in error_patterns)
+        
+        return all([
+            has_html_structure,
+            has_canvas_setup,
+            has_js_features,
+            has_event_handler,
+            has_no_errors
+        ])

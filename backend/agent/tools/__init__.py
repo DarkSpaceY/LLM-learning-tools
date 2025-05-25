@@ -15,8 +15,7 @@ from .knowledge_extractor import (
 from .exercise_generator import (
     Exercise,
     ExerciseSet,
-    ExerciseGenerator,
-    generate_exercise
+    ExerciseGenerator
 )
 from .knowledge_search import (
     Resource,
@@ -35,7 +34,6 @@ __all__ = [
     'Exercise',
     'ExerciseSet',
     'ExerciseGenerator',
-    'generate_exercise',
     
     # 资源搜索
     'Resource',

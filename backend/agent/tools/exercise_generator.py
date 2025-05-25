@@ -8,13 +8,10 @@ from pydantic import BaseModel, Field
 class Exercise(BaseModel):
     """练习题结构"""
     question: str = Field(description="题目内容")
-    options: List[str] = Field(description="选项列表(选择题)")
+    options: Dict[str, str] = Field(description="选项映射(选择题)，如{'A': '选项1', 'B': '选项2'}")
     answer: str = Field(description="正确答案")
-    explanation: str = Field(description="答案解释")
-    difficulty: str = Field(description="难度级别(easy/medium/hard)")
-    topic: str = Field(description="题目主题")
-    type: str = Field(description="题目类型(选择题/填空题/简答题)")
-    keywords: List[str] = Field(description="相关关键词")
+    type_: str = Field(description="题目类型(multiple_choice/true_false/short_answer/fill_blank/calculation)")
+
 
 
 class ExerciseSet(BaseModel):
@@ -29,56 +26,111 @@ class ExerciseGenerator:
     def __init__(self, llm: LLM):
         self.llm = llm
         self.parser = PydanticOutputParser(pydantic_object=Exercise)
-        
-        self.prompt = PromptTemplate(
-            template=(
-                "请根据以下要求生成一道练习题。\n\n"
-                "主题：{topic}\n"
-                "难度：{difficulty}\n"
-                "类型：{exercise_type}\n\n"
-                "要求：\n"
-                "1. 题目要清晰明确\n"
-                "2. 选项要合理且有区分度\n"
-                "3. 答案要有详细解释\n"
-                "4. 难度要符合要求\n\n"
-                "请按以下格式输出：\n{format_instructions}\n"
-            ),
-            input_variables=["topic", "difficulty", "exercise_type"],
-            partial_variables={
-                "format_instructions": self.parser.get_format_instructions()
-            }
-        )
 
-    async def generate(
+    async def generate_batch(
         self,
         topic: str,
-        difficulty: str = "medium",
-        exercise_type: str = "选择题"
-    ) -> Dict[str, Any]:
-        """生成练习题"""
+        types: List[str],
+        difficulty: int = 3,
+        count: int = 5
+    ) -> List[Dict[str, Any]]:
+        """批量生成练习题
+        
+        Args:
+            topic: 知识点
+            types: 题目类型列表
+            difficulty: 难度等级(1-5)
+            count: 生成数量
+            
+        Returns:
+            List[Dict]: 生成的练习题列表
+        """
         try:
-            # 生成并格式化提示
-            prompt = self.prompt.format(
-                topic=topic,
-                difficulty=difficulty,
-                exercise_type=exercise_type
-            )
+            # 构建批量生成提示
+            prompt = f"""请根据以下要求生成练习题：
+            知识点：{topic}
+            请你生成{count}道{', '.join(types)}（确保生成的题型正确，只能生成指定的题目类型！）
+            难度等级：{difficulty}/5
+
+            要求：
+            1. 题目难度要符合指定等级
+            2. 每道题必须包含题目类型、题干和答案
+            3. 选择题的题干部分需要使用///分隔选项
+            4. 填空题的题干部分需要填入地方的用____代替
+            5. 判断题/计算题/简答题的题干是一个整体，无分隔
+
+            各题型示例：
+            选择题示例：
+            <选择题|以下哪个是正确的字符串拼接方式///A. a = "hello" + "world"///B. a = ",".join(["hello", "world"]) ///C. a = str.concat("hello", "world")///D. a = "hello" % "world"|B>
+
+            判断题示例：
+            <判断题|Python中的列表是不可变数据类型|错误>
+
+            填空题示例：
+            <填空题|在Python中，使用____函数可以获取列表的长度|len>
+
+            计算题示例：
+            <计算题|一个列表[1,2,3,4,5]，请计算其所有元素的平均值|3>
+
+            简答题示例：
+            <简答题|简述Python中的列表推导式的优势|列表推导式提供了创建列表的简洁方式，具有以下优势：1. 代码更简洁优雅 2. 执行效率更高 3. 可读性好 4. 可以结合条件筛选>
+
+            请使用以下格式输出每道题目：
+            <题目类型|题干|答案>
+            <题目类型|题干|答案>
+            <题目类型|题干|答案>
+            ...
+
+            注意：
+            - 选择题的题干部分需要使用/分隔选项
+            - 填空题的题干部分需要填入地方的用____代替
+            - 判断题/计算题/简答题的题干是一个整体，无分隔
+            """
+            
+            # 初始化输出列表
+            output = []
             
             # 使用LLM生成结果
-            output = self.llm(prompt)
+            async for chunk in self.llm._call(prompt):
+                output.append(chunk)
+            output = ''.join(output)
+            # 解析输出格式
+            exercises = []
+            for line in output.strip().split('\n'):
+                line = line.strip()
+                if line.startswith('<') and line.endswith('>'):
+                    try:
+                        # 移除尖括号并分割字段
+                        fields = line[1:-1].split('|')
+                        if len(fields) != 3:
+                            continue
+                            
+                        exercise_type, question, answer = fields
+                        
+                        # 处理选项
+                        options = {}
+                        if exercise_type.strip() == '选择题':
+                            option_list = question.strip().split('///')
+                            if len(option_list) > 1:
+                                question = option_list[0]
+                                for i, opt in enumerate(option_list[1:], start=0):
+                                    options[chr(65 + i)] = opt.strip()
+                        
+                        # 创建练习题对象
+                        exercise_data = {
+                            'question': question.strip(),
+                            'options': options,
+                            'answer': answer.strip(),
+                            'type_': exercise_type.strip().lower().replace('题', ''),
+                        }
+                        
+                        exercise = Exercise(**exercise_data)
+                        exercises.append(exercise.dict())
+                    except Exception as e:
+                        print(f"题目解析失败: {str(e)}")
+                        continue
             
-            # 解析输出
-            exercise = self.parser.parse(output)
-            
-            # 返回结果
-            return {
-                "exercise": exercise.dict(),
-                "metadata": {
-                    "topic": topic,
-                    "difficulty": difficulty,
-                    "type": exercise_type
-                }
-            }
+            return exercises[:count]  # 确保返回指定数量的题目
         except Exception as e:
             print(f"练习题生成失败: {str(e)}")
             return {
@@ -98,52 +150,3 @@ class ExerciseGenerator:
                     "type": exercise_type
                 }
             }
-
-    def format_output(self, result: Dict[str, Any]) -> str:
-        """格式化输出为易读的文本"""
-        ex = result["exercise"]
-        difficulty_map = {
-            'easy': '简单 🟢',
-            'medium': '中等 🟡',
-            'hard': '困难 🔴'
-        }
-        
-        diff = difficulty_map.get(ex['difficulty'], ex['difficulty'])
-        
-        # 构建基本信息
-        output = [
-            f"📝 练习题 ({diff})",
-            f"📚 主题：{ex['topic']}",
-            f"\n❓ 问题：\n{ex['question']}\n"
-        ]
-        
-        # 如果是选择题，添加选项
-        if ex['type'] == '选择题':
-            for i, option in enumerate(ex['options'], start=1):
-                output.append(f"{chr(64+i)}. {option}")
-            output.append("")
-        
-        # 添加答案和解释
-        output.extend([
-            f"\n✅ 答案：{ex['answer']}",
-            f"\n💡 解释：\n{ex['explanation']}",
-            f"\n🏷️ 关键词：{', '.join(ex['keywords'])}"
-        ])
-        
-        return "\n".join(output)
-
-
-async def generate_exercise(
-    topic: str,
-    llm: LLM,
-    difficulty: str = "medium",
-    exercise_type: str = "选择题",
-    format_output: bool = True
-) -> str:
-    """生成练习题的工具函数"""
-    generator = ExerciseGenerator(llm)
-    result = await generator.generate(topic, difficulty, exercise_type)
-    
-    if format_output:
-        return generator.format_output(result)
-    return str(result)

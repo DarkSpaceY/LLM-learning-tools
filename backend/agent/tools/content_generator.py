@@ -81,10 +81,7 @@ PROMPT_TEMPLATES = {
 1. 重要概念用加粗标记
 2. 适当使用数学公式：
    - 行内公式用单个$包裹，如：$E=mc^2$
-   - 块级公式用两个$$包裹，如：
-     $$
-     \frac{n!}{k!(n-k)!} = \binom{n}{k}
-     $$
+   - 块级公式用两个$$包裹
 3. 适当使用图表辅助说明
 4. 根据小节描述详细展开该小节的核心内容
 5. 语言简洁易懂，逻辑清晰
@@ -331,7 +328,6 @@ async def generate_section_content(
         section=f"{section.number} {section.title}",
         description=section.description
     )
-    
     content = ""
     async for chunk in llm._call(prompt):
         if not chunk:

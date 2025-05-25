@@ -57,8 +57,17 @@
           </label>
         </div>
 
+        <div class="model-search">
+          <input
+            type="text"
+            v-model="searchQuery"
+            :placeholder="t('搜索模型')"
+            class="search-input"
+          >
+        </div>
+
         <div class="model-list">
-          <div v-for="model in availableModels" :key="model.id" class="model-item">
+          <div v-for="model in filteredModels" :key="model.id" class="model-item">
             <label class="model-label">
               <input
                 type="radio"
@@ -73,6 +82,24 @@
               </div>
             </label>
           </div>
+        </div>
+
+        <div class="pagination" v-if="totalPages > 1">
+          <button 
+            @click="currentPage--" 
+            :disabled="currentPage === 1"
+            class="page-button"
+          >
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
+          <button 
+            @click="currentPage++" 
+            :disabled="currentPage === totalPages"
+            class="page-button"
+          >
+            <i class="fas fa-chevron-right"></i>
+          </button>
         </div>
 
         <div class="setting-item">
@@ -135,7 +162,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import { eventBus, Events } from '../utils/eventBus'
 
 // i18n翻译
@@ -188,10 +215,37 @@ const currentLanguage = ref('zh-CN')
 const t = (key) => translations[currentLanguage.value]?.[key] || key
 
 const availableModels = ref([])
+const searchQuery = ref('')
+const currentPage = ref(1)
+const pageSize = ref(5)
+
 const pendingSettings = ref({
   default_provider: 'ollama',
   theme: 'light',
   language: 'zh-CN'
+})
+
+// 根据搜索和分页过滤模型列表
+const filteredModels = computed(() => {
+  const query = searchQuery.value.toLowerCase()
+  const filtered = availableModels.value.filter(model => 
+    model.name.toLowerCase().includes(query) ||
+    model.description.toLowerCase().includes(query)
+  )
+  
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filtered.slice(start, end)
+})
+
+// 计算总页数
+const totalPages = computed(() => {
+  const query = searchQuery.value.toLowerCase()
+  const filtered = availableModels.value.filter(model => 
+    model.name.toLowerCase().includes(query) ||
+    model.description.toLowerCase().includes(query)
+  )
+  return Math.ceil(filtered.length / pageSize.value)
 })
 
 const providerConfig = ref({
@@ -535,11 +589,49 @@ onActivated(refreshSettings)
   letter-spacing: -0.5px;
 }
 
+.model-search {
+  margin: 1rem 0;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
 .model-list {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  margin-bottom: 1rem; /* 在下面添加空行 */
+  grid-template-columns: repeat(auto-fill, minmax(1000px, 1000px));
+  margin-bottom: 1rem;
+  justify-content: center;
+}
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 1rem 0;
+  gap: 1rem;
+}
+
+.page-button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+.page-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 1rem;
 }
 
 .model-item {
@@ -548,6 +640,9 @@ onActivated(refreshSettings)
   border: 1px solid var(--border-color);
   transition: all 0.2s;
   background: var(--bg-color);
+  height: 120px;
+  display: flex;
+  align-items: center;
 }
 
 .model-item:hover {
@@ -574,6 +669,11 @@ onActivated(refreshSettings)
 .model-name {
   font-weight: 500;
   color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .model-type {
@@ -589,6 +689,11 @@ onActivated(refreshSettings)
   opacity: 0.7;
   margin-top: 0.25rem;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .setting-item {

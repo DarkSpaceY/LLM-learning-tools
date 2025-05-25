@@ -167,17 +167,31 @@ export const t = (key) => translations[settings.value.language]?.[key] || key
 export const loadSettings = async () => {
   try {
     const response = await fetch('/api/settings')
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
     const result = await response.json()
     if (result.success) {
       settings.value = {
-        theme: result.data.theme,
-        language: result.data.language,
-        default_model: result.data.default_model
+        theme: result.data?.theme || 'light',
+        language: result.data?.language || 'zh-CN',
+        default_model: result.data?.default_model || 'deepseek-r1:8b'
       }
       applyTheme(settings.value.theme)
     }
   } catch (error) {
     console.error('Error loading settings:', error)
+    // 设置默认值
+    settings.value = {
+      theme: 'light',
+      language: 'zh-CN',
+      default_model: 'deepseek-r1:8b'
+    }
+    applyTheme('light')
+    // 使用Element Plus的消息提示
+    if (window.ElMessage) {
+      window.ElMessage.error(t('设置加载失败，已使用默认配置'))
+    }
   }
 }
 

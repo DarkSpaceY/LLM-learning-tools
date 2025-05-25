@@ -103,17 +103,17 @@ class KnowledgePointRequest(BaseModel):
 
 
 class ExerciseRequest(BaseModel):
-    knowledge_points: List[str]
+    topic: str
     difficulty: int = 3
     count: int = 1
-    exercise_type: str = "选择题"
+    types: List[str]
     model: str = DEFAULT_MODEL
 
 
 class ResourceRequest(BaseModel):
     query: str
-    resource_type: str = None
-    difficulty: int = None
+    types: List[str] = []  # 支持多个资源类型
+    difficulty: int = 0
     model: str = DEFAULT_MODEL
 
 
@@ -129,12 +129,12 @@ class ConceptRequest(BaseModel):
     concept_name: str
     context: str = ""
     user_level: int = 3
+    dimensions: List[str] = []  # 指定概念分析的维度，如["定义", "特征", "示例", "关联概念"]
     model: str = DEFAULT_MODEL
 
 
 class SimulationRequest(BaseModel):
     topic: str
-    complexity: int = 3
     model: str = DEFAULT_MODEL
 
 
@@ -688,10 +688,11 @@ async def parse_knowledge_point(request: KnowledgePointRequest):
     """解析知识点"""
     try:
         knowledge_point = await knowledge_point_parser.parse_knowledge_point(request.content)
+        print(f"解析后的知识点：{knowledge_point}")
         return ResponseModel(
             success=True,
             message="解析知识点成功",
-            data=knowledge_point.dict()
+            data=knowledge_point
         )
     except Exception as e:
         raise HTTPException(
@@ -701,25 +702,28 @@ async def parse_knowledge_point(request: KnowledgePointRequest):
 
 
 # 练习题生成相关路由
-@app.post("/api/exercise/generate", response_model=ResponseModel)
-@with_retry()
+@app.post("/api/exercises/generate", response_model=ResponseModel)
 async def generate_exercises(request: ExerciseRequest):
-    """生成练习题"""
+    """批量生成练习题"""
     try:
-        exercises = await exercise_generator.generate_exercise_set(
-            request.knowledge_points,
-            request.count,
-            (request.difficulty, request.difficulty)
+        
+        # 生成练习题
+        exercises = await exercise_generator.generate_batch(
+            topic=request.topic,
+            types=request.types,
+            difficulty=request.difficulty,
+            count=request.count
         )
+        print(f"生成的练习题：{exercises}")
         return ResponseModel(
             success=True,
-            message="生成练习题成功",
-            data=[exercise.dict() for exercise in exercises]
+            message="练习题生成成功",
+            data=exercises
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"生成练习题失败：{str(e)}"
+            detail=f"生成练习题失败: {str(e)}"
         )
 
 
@@ -729,15 +733,20 @@ async def generate_exercises(request: ExerciseRequest):
 async def search_resources(request: ResourceRequest):
     """搜索学习资源"""
     try:
+        # 调用资源搜索器
         resources = await resource_searcher.search_resources(
             request.query,
-            request.resource_type,
+            request.types,
             request.difficulty
         )
+        # 返回完整资源列表
         return ResponseModel(
             success=True,
             message="搜索资源成功",
-            data=[resource.dict() for resource in resources]
+            data={
+                "items": [resource.dict() for resource in resources],
+                "total": len(resources)
+            }
         )
     except Exception as e:
         raise HTTPException(
@@ -776,48 +785,42 @@ async def generate_learning_plan(request: LearningPlanRequest):
 async def analyze_concept(request: ConceptRequest):
     """分析概念"""
     try:
-        concept = await concept_analyzer.analyze_concept(
-            request.concept_name,
-            request.context
+        result = await concept_analyzer.analyze_concept(
+            concept=request.concept_name
         )
-        explanation = await concept_analyzer.explain_concept(
-            concept,
-            request.user_level
-        )
+        print(f"Concept analysis result: {result}")
         return ResponseModel(
             success=True,
-            message="分析概念成功",
-            data={
-                "concept": concept.dict(),
-                "explanation": explanation
-            }
+            message="概念分析成功",
+            data=result
         )
     except Exception as e:
+        print(f"Error during concept analysis: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"分析概念失败：{str(e)}"
+            detail=f"概念分析失败：{str(e)}"
         )
 
 
 # 仿真环境相关路由
-@app.post("/api/simulation/create", response_model=ResponseModel)
+@app.post("/api/simulation/generate", response_model=ResponseModel)
 @with_retry()
-async def create_simulation(request: SimulationRequest):
-    """创建仿真环境"""
+async def generate_simulation(request: SimulationRequest):
+    """生成仿真环境"""
     try:
         simulation = await simulation_builder.create_simulation(
-            request.topic,
-            request.complexity
+            request.topic
         )
+        print(f"Simulation generated: {simulation}")
         return ResponseModel(
             success=True,
-            message="创建仿真环境成功",
-            data=simulation.dict()
+            message="生成仿真环境成功",
+            data=simulation
         )
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"创建仿真环境失败：{str(e)}"
+            detail=f"生成仿真环境失败：{str(e)}"
         )
 
 

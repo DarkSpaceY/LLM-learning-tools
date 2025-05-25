@@ -20,7 +20,7 @@ from .llm_providers import (
     OpenRouterLLM
 )
 from .llm_providers import api_config, get_provider_config, get_user_settings
-
+import os,sys
 
 # 默认配置
 DEFAULT_PROVIDER = api_config.default_provider
@@ -233,10 +233,19 @@ class ContentGenerator:
 
         except Exception as e:
             error = str(e) or "未知错误"
-            print(f"\n错误：{error}")
+            tb = getattr(e, '__traceback__', None)
+            if tb is not None:
+                # 提取文件名（仅显示基本名称）和行号
+                filename = os.path.basename(tb.tb_frame.f_code.co_filename)
+                lineno = tb.tb_lineno
+                location = f"文件: {filename}, 行号: {lineno}"
+            else:
+                location = "位置未知"
+        
+            print(f"\n错误：{error}\n发生位置：{location}")
             yield {
                 "type": "error",
-                "message": f"生成过程出错: {error}"
+                "message": f"生成过程出错: {error} ({location})"
             }
 
 

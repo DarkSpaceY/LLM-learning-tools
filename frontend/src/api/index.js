@@ -21,7 +21,7 @@ export const generateExercises = (params) => {
 
 // 资源搜索API
 export const searchResources = (params) => {
-  return api.post('/tools/resource-searcher/search', params)
+  return api.post('/api/resources/search', params)
 }
 
 // 学习计划生成API
@@ -43,6 +43,16 @@ export const buildSimulation = (params) => {
 export const streamDialogue = (params) => {
   const { sessionId, message, model } = params
   return `/dialogue/stream?session_id=${sessionId}&message=${encodeURIComponent(message)}&model=${model}`
+}
+
+// 资源收藏API
+export const saveResource = (resourceId) => {
+  return api.post('/tools/resource-searcher/save', { resource_id: resourceId })
+}
+
+// 资源分享API
+export const shareResource = (resourceId) => {
+  return api.post('/tools/resource-searcher/share', { resource_id: resourceId })
 }
 
 // 教程相关API

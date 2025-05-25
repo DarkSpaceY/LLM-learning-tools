@@ -1,6 +1,9 @@
 from typing import List, Dict, Any
 from pydantic import BaseModel
 from langchain.llms.base import BaseLLM
+import re
+import uuid
+from typing import Optional
 
 class Resource(BaseModel):
     """学习资源数据模型"""
@@ -9,12 +12,7 @@ class Resource(BaseModel):
     description: str
     type: str  # 资源类型：视频、文章、教程等
     url: str  # 资源链接
-    source: str  # 来源平台
     difficulty: int  # 1-5表示难度等级
-    knowledge_points: List[str]  # 相关知识点ID列表
-    tags: List[str]  # 标签
-    rating: float = 0.0  # 评分
-    reviews: List[Dict[str, Any]] = []  # 评价
 
 class ResourceSearcher:
     """学习资源搜索器"""
@@ -22,106 +20,86 @@ class ResourceSearcher:
         self.llm = llm
         self.resource_database: List[Resource] = []  # 模拟资源数据库
 
-    async def search_resources(self, query: str, resource_type: str = None, difficulty: int = None) -> List[Resource]:
-        """搜索学习资源"""
+    async def search_resources(self, query: str, resource_type: Optional[str] = None, difficulty: Optional[int] = None) -> List[Resource]:
+        """搜索学习资源
+        
+        Args:
+            query: 搜索关键词
+            resource_type: 资源类型（可选）
+            difficulty: 难度等级1-5（可选）
+            
+        Returns:
+            List[Resource]: 资源列表
+        """
         prompt = f"""请根据以下条件搜索学习资源：
         查询内容：{query}
         资源类型：{resource_type if resource_type else '所有类型'}
         难度等级：{difficulty if difficulty else '不限'}
         
-        请返回最相关的学习资源列表。
+        严格要求：
+        1. 必须严格按照以下格式返回资源信息，不得添加任何额外内容
+        2. 每个资源必须包含且仅包含5个字段：标题、描述、类型、URL和难度
+        3. 难度必须是1-5的整数
+        4. 所有字段使用|分隔，整个资源信息用<>包裹
+        
+        格式：<标题|描述|类型|URL|难度>
+        示例：<Python入门教程|适合初学者的Python教程|视频|https://example.com/python|3>
+        
+        请返回3-5个最相关的资源，每个资源占一行。
         """
         
         try:
-            response = await self.llm.agenerate([prompt])
-            result = response.generations[0][0].text
+            # 获取LLM响应
+            result = []
+            async for chunk in self.llm._call(prompt):
+                result.append(chunk)
+            result = ''.join(result)
             
-            # 这里应该实现实际的资源搜索逻辑
-            # 当前返回模拟数据
-            return [
-                Resource(
-                    id="resource1",
-                    title="示例资源",
-                    description="这是一个示例学习资源",
-                    type=resource_type or "article",
-                    url="https://example.com/resource1",
-                    source="Example Platform",
-                    difficulty=difficulty or 3,
-                    knowledge_points=[],
-                    tags=["示例", "教程"],
-                    rating=4.5
-                )
-            ]
+            # 使用更严格的正则表达式匹配
+            pattern = r'<([^>]+)>'
+            matches = re.finditer(pattern, result)
+            
+            resources = []
+            for match in matches:
+                resource_str = match.group(1).strip()
+                
+                try:
+                    # 分割并验证字段
+                    parts = [part.strip() for part in resource_str.split('|')]
+                    
+                    if len(parts) != 5:
+                        continue
+                        
+                    title, description, res_type, url, difficulty_str = parts
+                    
+                    # 验证必填字段
+                    if not all([title, description, res_type, url, difficulty_str]):
+                        continue
+                        
+                    # 验证难度值
+                    try:
+                        difficulty_val = int(difficulty_str)
+                        if not 1 <= difficulty_val <= 5:
+                            continue
+                    except ValueError:
+                        continue
+                    
+                    # 创建资源对象
+                    resource = Resource(
+                        id=str(uuid.uuid4()),
+                        title=title,
+                        description=description,
+                        type=res_type,
+                        url=url.replace('`', ''),  # 清理URL中的反引号
+                        difficulty=difficulty_val
+                    )
+                    resources.append(resource)
+                    
+                except (ValueError, IndexError) as e:
+                    # 记录具体错误但继续处理
+                    print(f"解析资源失败: {str(e)}，资源字符串: {resource_str}")
+                    continue
+            return resources
+            
         except Exception as e:
             raise ValueError(f"搜索资源失败：{str(e)}")
-
-    async def recommend_resources(self, knowledge_points: List[str], user_level: int) -> List[Resource]:
-        """推荐学习资源"""
-        prompt = f"""请根据以下条件推荐学习资源：
-        知识点：{', '.join(knowledge_points)}
-        用户水平：{user_level}（1-5）
-        
-        请推荐最适合的学习资源。
-        """
-        
-        try:
-            response = await self.llm.agenerate([prompt])
-            result = response.generations[0][0].text
-            
-            # 实现推荐逻辑
-            # 当前返回模拟数据
-            return [
-                Resource(
-                    id=f"rec{i}",
-                    title=f"推荐资源 {i}",
-                    description="这是一个推荐的学习资源",
-                    type="video",
-                    url=f"https://example.com/resource{i}",
-                    source="Recommendation System",
-                    difficulty=user_level,
-                    knowledge_points=knowledge_points,
-                    tags=["推荐", "精选"],
-                    rating=4.8
-                ) for i in range(3)
-            ]
-        except Exception as e:
-            raise ValueError(f"推荐资源失败：{str(e)}")
-
-    async def evaluate_resource(self, resource: Resource, user_feedback: Dict[str, Any]) -> Dict[str, Any]:
-        """评估学习资源"""
-        prompt = f"""请评估以下学习资源：
-        资源标题：{resource.title}
-        资源类型：{resource.type}
-        难度等级：{resource.difficulty}
-        用户反馈：{user_feedback}
-        
-        请分析资源的质量和适用性。
-        """
-        
-        try:
-            response = await self.llm.agenerate([prompt])
-            analysis = response.generations[0][0].text
-            
-            # 更新资源评分和评价
-            if 'rating' in user_feedback:
-                # 计算新评分
-                total_ratings = len(resource.reviews) + 1
-                new_rating = (resource.rating * len(resource.reviews) + user_feedback['rating']) / total_ratings
-                resource.rating = round(new_rating, 1)
-            
-            # 添加新评价
-            if 'comment' in user_feedback:
-                resource.reviews.append({
-                    'rating': user_feedback.get('rating', 0),
-                    'comment': user_feedback['comment'],
-                    'timestamp': 'current_timestamp'  # 应该使用实际的时间戳
-                })
-            
-            return {
-                'resource_id': resource.id,
-                'new_rating': resource.rating,
-                'analysis': analysis,
-                'recommendations': '根据评估结果提供的建议'
-            }
-        except Exception as e:
-            raise ValueError(f"评估资源失败：{str(e)}")

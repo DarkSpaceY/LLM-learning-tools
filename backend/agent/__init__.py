@@ -21,7 +21,6 @@ from .tools import (
     Exercise,
     ExerciseSet,
     ExerciseGenerator,
-    generate_exercise,
     Resource,
     ResourceList,
     KnowledgeSearcher,
