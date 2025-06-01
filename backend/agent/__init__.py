@@ -15,16 +15,18 @@ from .langchain_agent import (
 )
 
 from .tools import (
-    KnowledgePoint,
-    KnowledgeExtractor,
-    extract_knowledge_points,
     Exercise,
     ExerciseSet,
     ExerciseGenerator,
     Resource,
     ResourceList,
     KnowledgeSearcher,
-    search_resources
+    search_resources,
+    KnowledgeNode,
+    KnowledgeEdge,
+    KnowledgeGraphGenerator,
+    SimulationBuilder,
+    generate_section_content
 )
 
 __all__ = [
@@ -34,17 +36,18 @@ __all__ = [
     'langchain_agent',
     
     # 工具类
-    'KnowledgePoint',
-    'KnowledgeExtractor',
-    'extract_knowledge_points',
     'Exercise',
     'ExerciseSet',
     'ExerciseGenerator',
-    'generate_exercise',
     'Resource',
     'ResourceList',
     'KnowledgeSearcher',
-    'search_resources'
+    'search_resources',
+    'KnowledgeNode',
+    'KnowledgeEdge',
+    'KnowledgeGraphGenerator',
+    'SimulationBuilder',
+    'generate_section_content'
 ]
 
 # 版本信息

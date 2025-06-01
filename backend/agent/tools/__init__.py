@@ -6,12 +6,6 @@ AI教育助手工具集
 - 练习题生成
 - 资源搜索
 """
-
-from .knowledge_extractor import (
-    KnowledgePoint,
-    KnowledgeExtractor,
-    extract_knowledge_points
-)
 from .exercise_generator import (
     Exercise,
     ExerciseSet,
@@ -23,13 +17,19 @@ from .knowledge_search import (
     KnowledgeSearcher,
     search_resources
 )
+from .knowledge_graph_generator import (
+    KnowledgeNode,
+    KnowledgeEdge,
+    KnowledgeGraphGenerator
+)
+from .simulation_builder import (
+    SimulationBuilder
+)
+from .content_generator import (
+    generate_section_content
+)
 
 __all__ = [
-    # 知识点提取
-    'KnowledgePoint',
-    'KnowledgeExtractor',
-    'extract_knowledge_points',
-    
     # 练习题生成
     'Exercise',
     'ExerciseSet',
@@ -39,7 +39,18 @@ __all__ = [
     'Resource',
     'ResourceList',
     'KnowledgeSearcher',
-    'search_resources'
+    'search_resources',
+    
+    # 知识图谱
+    'KnowledgeNode',
+    'KnowledgeEdge',
+    'KnowledgeGraphGenerator',
+    
+    # 仿真实验
+    'SimulationBuilder',
+    
+    # 内容生成
+    'generate_section_content'
 ]
 
 # 版本信息
