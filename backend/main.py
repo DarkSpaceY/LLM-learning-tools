@@ -8,10 +8,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-# 设置Python路径
-sys.path.append(os.path.join(os.path.dirname(__file__), 'learning-tree'))
 
 # 导入本地模块
 from agent import (  # noqa: E402
@@ -175,20 +174,118 @@ def with_retry(max_attempts: int = 3):
     )
 
 
+# 创建Saves目录（如果不存在）
+SAVES_DIR = 'Saves'
+os.makedirs(SAVES_DIR, exist_ok=True)
+
+# 文件操作API
+@app.post("/api/save_outline")
+async def save_outline(request: Request):
+    try:
+        data = await request.json()
+        filename = data.get('filename')
+        content = data.get('content')
+        
+        if not filename or not content:
+            raise HTTPException(status_code=400, detail="缺少必要的参数")
+
+        file_path = os.path.join(SAVES_DIR, filename)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(content, f, ensure_ascii=False, indent=2)
+            
+        return {"success": True, "message": "保存成功"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/list_saves")
+async def list_saves():
+    try:
+        files = [f for f in os.listdir(SAVES_DIR) if f.endswith('.json')]
+        files.sort(reverse=True)  # 最新的文件排在前面
+        return files
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/load_outline")
+async def load_outline(filename: str):
+    try:
+        file_path = os.path.join(SAVES_DIR, filename)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="文件不存在")
+            
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        return data
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="文件格式无效")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/save_temp_file")
+async def save_temp_file(request: Request):
+    try:
+        data = await request.json()
+        filename = data.get('filename')
+        content = data.get('content')
+        if not filename or not content:
+            raise HTTPException(status_code=400, detail="缺少必要的参数")
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(content))
+            
+        return {"success": True, "message": "临时文件保存成功"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 # API路由
 @app.get("/api/dialogue/stream")
 async def handle_dialogue_stream(
     session_id: str,
     message: str,
-    model: str = DEFAULT_MODEL
+    model: str = DEFAULT_MODEL,
+    has_outline: bool = False,
+    use_web_search: bool = False
 ):
+    import os
+    try:
+        if os.path.exists('temp_encodedTutorial.txt'):
+            with open('temp_encodedTutorial.txt', 'r', encoding='utf-8') as file:
+                tutorial = file.read()
+        else:
+            tutorial = None
+    except Exception as e:
+        print(f"读取 temp_encodedTutorial.txt 文件时出错: {e}")
+
+    # 检查 temp_encodedTutorial.txt 文件是否存在，如果存在则删除
+    file_path = 'temp_encodedTutorial.txt'
+    if os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+            print(f"{file_path} 已成功删除")
+        except Exception as e:
+            print(f"删除 {file_path} 时出错: {e}")
+
     """流式处理用户对话交互"""
     try:
+        # 解析教程数据
+        tutorial_data = None
+        if tutorial:
+            try:
+                tutorial_data = json.loads(tutorial)
+            except Exception as e:
+                print(f"解析教程数据时出错: {e}")
+                raise HTTPException(status_code=400, detail="教程数据格式无效")
+
         async def generate():
+            print("Starting stream generation...")
+            print("Session ID:", session_id)
+            print("Message:", message)
             async for chunk in langchain_agent.process_message(
                 session_id,
                 message,
-                model
+                model,
+                has_outline=has_outline,
+                tutorial_data=tutorial_data,
+                use_web_search=use_web_search
             ):
                 if chunk:
                     # 统一使用对象格式发送
@@ -284,32 +381,29 @@ async def handle_tool_call(request: ToolCallRequest):
             status_code=400,
             detail=str(e)
         )
+
+class StopGenerationRequest(BaseModel):
+    session_id: str
+
+@app.post("/api/stop_generation", response_model=ResponseModel)
+async def stop_generation(request: StopGenerationRequest):
+    """停止指定会话的生成过程"""
+    try:
+        success = langchain_agent.stop_generation(request.session_id)
+        return ResponseModel(
+            success=success,
+            message="停止生成成功" if success else "会话不存在或已停止",
+            data=None
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"停止生成失败：{str(e)}"
+        )
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"工具调用失败：{str(e)}"
-        )
-
-
-@app.get("/api/knowledge_graph", response_model=ResponseModel)
-@with_retry()
-async def get_knowledge_graph(topic: str, model: str = DEFAULT_MODEL):
-    """获取知识图谱数据"""
-    try:
-        graph_data = learning_tree_instance.get_graph_data(topic)
-        return ResponseModel(
-            success=True,
-            message="获取知识图谱成功",
-            data={
-                "nodes": graph_data.get("nodes", []),
-                "edges": graph_data.get("edges", []),
-                "model": model
-            }
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"获取知识图谱失败：{str(e)}"
         )
 
 
@@ -491,7 +585,7 @@ async def delete_tutorial(tutorial_id: str):
 knowledge_graph_generator = KnowledgeGraphGenerator(langchain_agent.llm)
 
 
-@app.post("/api/knowledge_graph/generate")
+@app.post("/api/api/knowledge_graph/generate")
 async def generate_knowledge_graph(request: Request):
     """生成知识图谱（流式输出）"""
     try:
@@ -538,7 +632,7 @@ async def generate_knowledge_graph(request: Request):
         )
 
 
-@app.post("/api/knowledge_graph/save")
+@app.post("/api/api/knowledge_graph/save")
 async def save_knowledge_graph(request: Request):
     """保存知识图谱"""
     try:
@@ -561,7 +655,7 @@ async def save_knowledge_graph(request: Request):
         )
 
 
-@app.get("/api/knowledge_graph/list")
+@app.get("/api/api/knowledge_graph/list")
 async def list_knowledge_graphs():
     """获取已保存的知识图谱列表"""
     try:
@@ -578,7 +672,7 @@ async def list_knowledge_graphs():
         )
     
 
-@app.get("/api/knowledge_graph/{filename}")
+@app.get("/api/api/knowledge_graph/{filename}")
 async def get_knowledge_graph_data(filename: str):
     """获取指定知识图谱的数据"""
     try:
@@ -600,7 +694,7 @@ async def get_knowledge_graph_data(filename: str):
         )
 
 
-@app.delete("/api/knowledge_graph/{filename}")
+@app.delete("/api/api/knowledge_graph/{filename}")
 async def delete_knowledge_graph(filename: str):
     """删除指定的知识图谱"""
     try:
@@ -616,7 +710,7 @@ async def delete_knowledge_graph(filename: str):
         )
 
 
-@app.post("/api/knowledge_graph/expand")
+@app.post("/api/api/knowledge_graph/expand")
 async def expand_knowledge_node(request: Request):
     """扩展知识图谱节点（流式响应）"""
     try:
@@ -766,6 +860,7 @@ async def generate_simulation(request: SimulationRequest):
             detail=f"生成仿真环境失败：{str(e)}"
         )
 
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
 
 if __name__ == "__main__":
     import uvicorn

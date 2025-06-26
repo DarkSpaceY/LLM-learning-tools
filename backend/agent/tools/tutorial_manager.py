@@ -2,11 +2,12 @@ import os
 import json
 from datetime import datetime
 from typing import List, Dict, Any
+import sys
 
 class TutorialManager:
     def __init__(self, save_dir: str = None):
         """初始化教程管理器"""
-        self.save_dir = save_dir or os.path.join(os.path.dirname(__file__), '..', '..', 'Saves')
+        self.save_dir = 'Saves'
         os.makedirs(self.save_dir, exist_ok=True)
 
     def save_tutorial(self, tutorial_data: Dict[str, Any]) -> str:
@@ -47,7 +48,11 @@ class TutorialManager:
                     tutorial = json.load(f)
 
                 # 转换为树形结构
-                tree_data = self._convert_to_tree(tutorial)
+                try:
+                    tree_data = self._convert_to_tree(tutorial)
+                except Exception as e:
+                    print(f"Failed to convert tutorial {filename} to tree: {str(e)}")
+                    continue
                 tutorials.append(tree_data)
 
             # 按创建时间倒序排序

@@ -1,8 +1,5 @@
-.roo/
 backend/__pycache__/
 backend/agent/__pycache__/
 backend/agent/tools/__pycache__/
-backend/learning-tree/__pycache__/
 backend/venv/
 frontend/node_modules/
-backend/.pytest_cache/

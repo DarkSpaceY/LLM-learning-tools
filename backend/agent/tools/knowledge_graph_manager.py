@@ -2,14 +2,11 @@ import os
 import json
 import datetime
 from typing import List, Dict, Any
-
+import sys
 
 class KnowledgeGraphManager:
     def __init__(self):
-        self.save_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            'mapSaves'
-        )
+        self.save_dir = 'mapSaves'
         os.makedirs(self.save_dir, exist_ok=True)
 
     def save_graph(self, graph_data: Dict[str, Any], topic: str) -> str:

@@ -5,10 +5,10 @@ import os
 from langchain.llms.base import LLM
 from pydantic import Field, BaseModel
 from pydantic_settings import BaseSettings
-
+import sys
 def get_user_settings() -> dict:
     """获取用户设置"""
-    settings_path = os.path.join(os.path.dirname(__file__), "../settings/user_settings.json")
+    settings_path = "settings/user_settings.json"
     try:
         with open(settings_path, "r", encoding="utf-8") as f:
             settings = json.load(f)

@@ -37,60 +37,86 @@ class OllamaLLM(LLM):
             "max_tokens": self.config.max_tokens
         }
 
+    async def clear_gpu_memory(self) -> None:
+        """清理Ollama模型的GPU显存"""
+        try:
+            url = f"{self.config.base_url}/api/generate"
+            payload = {
+                "model": self.config.model_name,
+                "keep_alive": 0
+            }
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status != 200:
+                        print(f"清理显存失败: Status {response.status}")
+                    else:
+                        print(f"已清理 {self.config.model_name} 的显存")
+        except Exception as e:
+            print(f"清理显存时出错: {str(e)}")
+
     async def _call(
         self,
         prompt: str,
         **kwargs: Any
     ) -> AsyncGenerator[str, None]:
         """调用Ollama API生成文本"""
-        async with aiohttp.ClientSession() as session:
-            url = f"{self.config.base_url}/api/generate"
-            headers = {"Content-Type": "application/json"}
-            
-            payload = {
-                "model": self.config.model_name,
-                "prompt": prompt,
-                "stream": True,
-                "options": {
-                    "temperature": self.config.temperature,
-                    "num_predict": self.config.max_tokens,
+        try:
+            await self.clear_gpu_memory()
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.config.base_url}/api/generate"
+                headers = {"Content-Type": "application/json"}
+                
+                payload = {
+                    "model": self.config.model_name,
+                    "prompt": prompt,
+                    "stream": True,
+                    "options": {
+                        "temperature": self.config.temperature,
+                        "num_predict": self.config.max_tokens,
+                    }
                 }
-            }
-            
-            print(f"发送请求: {url}")
-            print(f"使用模型: {payload['model']}")
+                
+                print(f"发送请求: {url}")
+                print(f"使用模型: {payload['model']}")
 
-            async with session.post(
-                url,
-                json=payload,
-                headers=headers
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise ValueError(
-                        f"API错误 ({response.status}): {error_text}"
-                    )
+                async with session.post(
+                    url,
+                    json=payload,
+                    headers=headers
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise ValueError(
+                            f"API错误 ({response.status}): {error_text}"
+                        )
 
-                async for line in response.content:
-                    if not line:
-                        continue
-                        
-                    text = line.decode('utf-8')
-                    if text == "":
-                        continue
-                        
-                    try:
-                        data = json.loads(text)
-                        if "error" in data:
-                            raise RuntimeError(data["error"])
-                        if "response" in data:
-                            # 直接返回原始响应
-                            response = data["response"]
-                            if response != "":  # 仅用于检查非空
-                                yield response  # 返回完整响应，包含换行符
-                    except json.JSONDecodeError:
-                        print(f"无效响应: {text[:100]}")
-                        continue
+                    async for line in response.content:
+                        if not line:
+                            continue
+                            
+                        text = line.decode('utf-8')
+                        if text == "":
+                            continue
+                            
+                        try:
+                            data = json.loads(text)
+                            if "error" in data:
+                                raise RuntimeError(data["error"])
+                            if "response" in data:
+                                # 直接返回原始响应
+                                response = data["response"]
+                                if response != "":  # 仅用于检查非空
+                                    yield response  # 返回完整响应，包含换行符
+                        except json.JSONDecodeError:
+                            print(f"无效响应: {text[:100]}")
+                            continue
+
+            # 生成完成后清理显存
+            await self.clear_gpu_memory()
+        except Exception as e:
+            # 发生错误时也清理显存
+            await self.clear_gpu_memory()
+            raise e
 
 
 class OllamaService:
@@ -193,10 +219,29 @@ class OllamaService:
                         data = await response.json()
                         yield data
 
+            # 对话完成后清理显存
+            await self.clear_gpu_memory(model)
+
         except Exception as e:
             error_msg = f"Error in chat: {str(e)}"
             print(error_msg)
             yield {"error": error_msg}
+            # 发生错误时也清理显存
+            await self.clear_gpu_memory(model)
+
+    async def clear_gpu_memory(self, model: str) -> None:
+        """清理指定模型的GPU显存"""
+        try:
+            url = f"{self.base_url}/api/show"
+            payload = {"name": model}
+            async with aiohttp.ClientSession() as session:
+                async with session.delete(url, json=payload) as response:
+                    if response.status != 200:
+                        print(f"清理显存失败: Status {response.status}")
+                    else:
+                        print(f"已清理 {model} 的显存")
+        except Exception as e:
+            print(f"清理显存时出错: {str(e)}")
 
     async def generate(self, model: str, prompt: str, stream: bool = False,
                       temperature: float = 0.7, max_tokens: int = 2000) -> AsyncGenerator[Dict[str, Any], None]:
@@ -245,10 +290,15 @@ class OllamaService:
                         data = await response.json()
                         yield data
 
+            # 生成完成后清理显存
+            await self.clear_gpu_memory(model)
+
         except Exception as e:
             error_msg = f"Error in generate: {str(e)}"
             print(error_msg)
             yield {"error": error_msg}
+            # 发生错误时也清理显存
+            await self.clear_gpu_memory(model)
 
 
 # 创建服务实例

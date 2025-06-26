@@ -180,7 +180,7 @@ const translations = {
     '深色': '深色',
     '跟随系统': '跟随系统',
     '语言': '语言',
-    '设置保存成功！': '设置保存成功！',
+    '设置保存成功！需要重启应用以应用新配置。': '设置保存成功！需要重启应用以应用新配置。',
     '保存设置失败：': '保存设置失败：',
     '请输入OpenAI API密钥以加载可用模型': '请输入OpenAI API密钥以加载可用模型',
     '请输入API密钥': '请输入API密钥',
@@ -208,7 +208,7 @@ const translations = {
     '深色': 'Dark',
     '跟随系统': 'System',
     '语言': 'Language',
-    '设置保存成功！': 'Settings saved successfully!',
+    '设置保存成功！需要重启应用以应用新配置。': 'Settings saved successfully! Please restart the app to apply the new settings.',
     '保存设置失败：': 'Failed to save settings: ',
     '请输入OpenAI API密钥以加载可用模型': 'Please enter OpenAI API key to load available models',
     '请输入API密钥': 'Please enter API key',
@@ -478,7 +478,7 @@ const saveAllSettings = async () => {
     })
     const result = await response.json()
     if (result.success) {
-      alert(t('设置保存成功！'))
+      confirm(t('设置保存成功！需要重启应用以应用新配置。'))
       eventBus.emit(Events.SETTINGS_UPDATED, settings)
     } else {
       throw new Error(result.message)

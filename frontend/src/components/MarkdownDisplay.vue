@@ -13,6 +13,7 @@
         <div class="code-block">
           <div v-if="lang" class="code-lang">{{ lang }}</div>
           <pre><code>{{ code }}</code></pre>
+          <pre class="scrollable-code"><code>{{ code }}</code></pre>
           <button class="copy-button" @click="copyCode(code)">
             <i class="fas fa-copy"></i>
           </button>
@@ -168,6 +169,28 @@ const copyCode = async (code) => {
 .copy-button i {
   font-size: 0.9rem;
   color: var(--bg-color);
+}
+
+/* 关键样式：为代码块添加滚动条 */
+.scrollable-code {
+  overflow: auto; /* 自动显示滚动条 */
+  max-height: 300px; /* 限制最大高度（根据需求调整） */
+  max-width: 100%; /* 防止水平溢出 */
+  padding: 1em; /* 内边距 */
+  margin: 0.5em 0; /* 外边距 */
+  background-color: #f5f5f5; /* 背景色 */
+  border-radius: 4px; /* 圆角 */
+}
+
+/* 暗黑模式适配 */
+.dark .scrollable-code {
+  background-color: #2d2d2d; /* 暗黑背景 */
+}
+
+/* 确保代码不换行 */
+.scrollable-code code {
+  white-space: pre; /* 保留空白和换行 */
+  display: block; /* 确保滚动条生效 */
 }
 
 /* 自定义其他 markdown 样式 */

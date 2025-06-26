@@ -92,7 +92,7 @@ export const translations = {
     '深色': '深色',
     '跟随系统': '跟随系统',
     '语言': '语言',
-    '设置保存成功！': '设置保存成功！',
+    '设置保存成功！需要重启应用以应用新配置。': '设置保存成功！需要重启应用以应用新配置。',
     '保存设置失败：': '保存设置失败：',
     
     // 对话页面
@@ -268,7 +268,7 @@ export const translations = {
     '深色': 'Dark',
     '跟随系统': 'System',
     '语言': 'Language',
-    '设置保存成功！': 'Settings saved successfully!',
+    '设置保存成功！需要重启应用以应用新配置。': 'Settings saved successfully! Please restart the app to apply the new settings.',
     '保存设置失败：': 'Failed to save settings: ',
     
     // Chat page

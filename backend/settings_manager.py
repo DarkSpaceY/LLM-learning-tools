@@ -58,8 +58,11 @@ class SettingsManager:
     def save_user_settings(self, settings: Dict[str, Any]) -> None:
         """保存用户设置"""
         os.makedirs(self.settings_dir, exist_ok=True)
+        with open(self.user_settings_file, 'r', encoding='utf-8') as f:
+            or_settings = json.load(f)
+        or_settings["global"][settings["global"]["default_provider"]] = settings["global"][settings["global"]["default_provider"]]
         with open(self.user_settings_file, 'w', encoding='utf-8') as f:
-            json.dump(settings, f, ensure_ascii=False, indent=2)
+            json.dump(or_settings, f, ensure_ascii=False, indent=2)
 
     def update_settings(
         self,

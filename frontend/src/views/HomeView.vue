@@ -84,10 +84,30 @@
           ref="inputField"
           :disabled="isLoading"
         ></textarea>
-        <button @click="sendMessage" :disabled="isLoading" class="send-button">
-          <i class="fas fa-paper-plane"></i>
-          {{ isLoading ? t('生成中...') : t('发送') }}
-        </button>
+        <div class="button-group">
+          <button @click="sendMessage" :disabled="isLoading" class="send-button">
+            <i class="fas fa-paper-plane"></i>
+            {{ isLoading ? t('生成中...') : t('发送') }}
+          </button>
+          <button v-if="isLoading" @click="stopGeneration" class="stop-button">
+            <i class="fas fa-stop"></i>
+            {{ t('停止') }}
+          </button>
+          <button @click="exportOutline" class="export-button">
+            <i class="fas fa-download"></i>
+            {{ t('导出') }}
+          </button>
+          <button @click="importOutline" class="import-button">
+            <i class="fas fa-upload"></i>
+            {{ t('导入') }}
+          </button>
+          <el-switch
+            v-model="useWebSearch"
+            :active-text="t('联网搜索(不稳定)')"
+            class="web-search-switch"
+          />
+
+        </div>
       </div>
     </div>
 
@@ -113,11 +133,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, h } from 'vue'
 import MarkdownDisplay from '../components/MarkdownDisplay.vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useSettings, t } from '../store/settings'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElSelect, ElOption } from 'element-plus'
 
 const settings = useSettings()
 const userInput = ref('')
@@ -125,7 +145,154 @@ const messageContainer = ref(null)
 const inputField = ref(null)
 const isLoading = ref(false)
 const sessionId = ref(uuidv4())
+const backuptitle = ref('')
 let eventSource = null
+
+// 停止生成
+const stopGeneration = async () => {
+  if (eventSource) {
+    eventSource.close()
+    eventSource = null
+    isLoading.value = false
+    // 调用后端停止生成的API
+    try {
+      const response = await fetch(`/api/stop_generation`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId.value })
+      })
+      const result = await response.json()
+      if (!result.success) {
+        throw new Error(result.message)
+      }
+      ElMessage.success(t('已停止生成'))
+    } catch (error) {
+      console.error('停止生成失败:', error)
+      ElMessage.error(t('停止生成失败：') + error.message)
+    }
+  }
+}
+
+// 导出大纲
+const exportOutline = async () => {
+  const now = new Date();
+  const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
+  console.log(outlineTree)
+  const outlineData = {
+    title: userQuestion.value || '未命名教程',
+    chapters: outlineTree.value.map(chapter => ({
+      number: chapter.id.split('-')[1],
+      title: chapter.label,
+      description: chapter.description,
+      sections: chapter.children?.map(section => ({
+        number: section.id.split('-')[1],
+        title: section.label.split(' ')[1],
+        description: section.description,
+        content: section.content
+      })) || []
+    })),
+    metadata: {
+      created_at: timestamp,
+      filename: `${timestamp}_${(userQuestion.value || '未命名教程').replace(/[\\/:*?"<>|]/g, '_')}.json`
+    }
+  }
+  
+  try {
+    const response = await fetch('/api/save_outline', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: `${timestamp}_${outlineData.title.replace(/[\\/:*?"<>|]/g, '_')}.json`,
+        content: outlineData
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error('保存失败')
+    }
+    
+    ElMessage.success(t('导出成功'))
+  } catch (error) {
+    console.error('导出失败:', error)
+    ElMessage.error(t('导出失败：' + error.message))
+  }
+}
+
+// 导入大纲
+const importOutline = async () => {
+  try {
+    // 获取Saves目录下的文件列表
+    const response = await fetch('/api/list_saves')
+    if (!response.ok) {
+      throw new Error('获取文件列表失败')
+    }
+    
+    const files = await response.json()
+    
+    // 使用 ElSelect 替代 ElMessageBox.prompt
+    const selectedFile = ref(files[0]) // 默认选中第一个文件
+
+    // 弹窗标题和内容
+    await ElMessageBox.confirm(t('请选择要导入的文件'), t('导入文件'), {
+      confirmButtonText: t('导入'),
+      cancelButtonText: t('取消'),
+      type: 'info',
+      // 将选择器嵌入弹窗内容区
+      message: () => h('div', [
+        h('p', t('请选择要导入的文件')),
+        h(ElSelect, {
+          modelValue: selectedFile.value,
+          'onUpdate:modelValue': (val) => selectedFile.value = val,
+          filterable: true,
+          style: { width: '100%', marginTop: '10px' },
+          placeholder: t('搜索文件名...')
+        }, () => files.map(file => 
+          h(ElOption, {
+            key: file,
+            label: file,
+            value: file
+          })
+        ))
+      ])
+    })
+
+    // 获取最终选择结果
+    const result = selectedFile.value
+    
+    if (result) {
+      // 读取选中的文件
+      const fileResponse = await fetch(`/api/load_outline?filename=${result}`)
+      if (!fileResponse.ok) {
+        throw new Error('读取文件失败')
+      }
+      
+      const data = await fileResponse.json()
+      userQuestion.value = data.title
+      backuptitle.value = data.title
+      // 将导入的数据转换为大纲树格式
+      outlineTree.value = data.chapters.map((chapter, index) => ({
+        id: `chapter-${chapter.number}`,
+        label: chapter.title,
+        type: 'chapter',
+        description: chapter.description,
+        children: chapter.sections.map((section, sIndex) => ({
+          id: `section-${section.number}`,
+          label: `${section.number} ${section.title}`,
+          title: `${section.number} ${section.title}`,
+          type: 'section',
+          description: section.description,
+          content: section.content
+        }))
+      }))
+      
+      sessionId.value = uuidv4()
+      ElMessage.success(t('导入成功'))
+    }
+  } catch (error) {
+    console.error('导入失败:', error)
+    ElMessage.error(t('导入失败：' + error.message))
+  }
+}
 
 // 状态管理
 const userQuestion = ref('')        // 用户问题
@@ -291,6 +458,7 @@ const splitThinkingBlocks = (content) => {
 
 // 控制是否显示思考过程
 const showThinking = ref(true)
+const useWebSearch = ref(false)
 
 
 // 清理EventSource
@@ -307,27 +475,85 @@ const ClearChunk = () => {
 
 // 发送消息
 const sendMessage = async () => {
-  if (!userInput.value.trim() || isLoading.value) return
+  if (isLoading.value) return
 
   const userMessage = userInput.value.trim()
+  let hasOutline = false
+  let encodedTutorial = ''
+  hasOutline = (outlineTree.value.length > 0)
+  if(!hasOutline && userMessage == "") {
+    return
+  }
   userInput.value = ''
   isLoading.value = true
   
+  let is_new_question = false
   // 重置状态
-  userQuestion.value = userMessage
+  if(userMessage != "") {
+    userQuestion.value = userMessage
+    is_new_question = true
+  } else {
+    userQuestion.value = backuptitle.value
+  }
   currentMessage.value = ''
   currentStage.value = ''
   currentProgress.value = 0
   progressStatus.value = ''
-  outlineTree.value = []
-
+  let tutorialData = ''
   try {
     // 清理现有的事件源
     cleanupEventSource()
-
     // 创建新的事件源
-    const encodedMessage = encodeURIComponent(userMessage)
-    const url = `/api/dialogue/stream?session_id=${sessionId.value}&message=${encodedMessage}&model=${settings.value.default_model}`
+    let encodedMessage = userMessage
+    if (hasOutline) {
+      // 如果存在大纲，则将大纲信息添加到请求中
+      tutorialData = {
+        title: backuptitle.value || '未命名教程',
+        chapters: outlineTree.value.map(chapter => ({
+          number: chapter.id.split('-')[1],
+          title: chapter.label,
+          description: chapter.description,
+          sections: chapter.children?.map(section => ({
+            number: section.id.split('-')[1],
+            title: section.label,
+            description: section.description,
+            content: section.content
+          })) || []
+        }))
+      }
+      encodedMessage = outlineTree.value[0]?.label || '未命名教程'
+    }
+    encodedTutorial = tutorialData
+    let url = ''
+    
+    // 尝试使用后端 save api 保存 encodedTutorial
+    try {
+      const response = await fetch('/api/save_temp_file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: 'temp_encodedTutorial.txt',
+          content: encodedTutorial
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('保存临时文件失败，后端响应异常');
+      }
+
+      console.log('临时文件保存成功');
+    } catch (error) {
+      console.error('保存临时文件失败:', error);
+    }
+    console.log('发送请求：', encodedTutorial);
+
+    if(is_new_question) {
+      // 新问题，清空对话
+      sessionId.value = uuidv4()
+      url = `/api/dialogue/stream?session_id=${sessionId.value}&message=${userQuestion.value}&model=${settings.value.default_model}&has_outline=${false}&use_web_search=${useWebSearch.value}`
+    }else{
+      url = `/api/dialogue/stream?session_id=${sessionId.value}&message=${encodedMessage}&model=${settings.value.default_model}&has_outline=${hasOutline}&use_web_search=${useWebSearch.value}`
+    }
     eventSource = new EventSource(url)
 
     // 处理消息
@@ -368,6 +594,10 @@ const sendMessage = async () => {
             
           case 'error':
             handleError(data)
+            break
+            
+          case 'stopped':
+            handleStopped(data)
             break
         }
       } catch (error) {
@@ -422,6 +652,13 @@ const handleProgress = (data) => {
   }
 }
 
+// 处理停止生成消息
+const handleStopped = (data) => {
+  isLoading.value = false
+  currentMessage.value = ''
+  ElMessage.info(t('生成已停止'))
+}
+
 // 处理完成消息
 const handleComplete = (data) => {
   isLoading.value = false
@@ -452,7 +689,7 @@ const saveTutorial = async () => {
     const tutorialData = {
       title: userQuestion.value,
       chapters: outlineTree.value.map(chapter => ({
-        number: parseInt(chapter.id.split('-')[1]),
+        number: chapter.id.split('-')[1],
         title: chapter.label,
         description: chapter.description,
         sections: chapter.children.map(section => ({
@@ -517,6 +754,75 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.web-search-switch {
+  margin-left: 10px;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.send-button,
+.stop-button,
+.export-button,
+.import-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.send-button {
+  background-color: var(--el-color-primary);
+  color: white;
+}
+
+.send-button:hover {
+  background-color: var(--el-color-primary-light-3);
+}
+
+.stop-button {
+  background-color: var(--el-color-danger);
+  color: white;
+}
+
+.stop-button:hover {
+  background-color: var(--el-color-danger-light-3);
+}
+
+.export-button,
+.import-button {
+  background-color: var(--el-color-info);
+  color: white;
+}
+
+.export-button:hover,
+.import-button:hover {
+  background-color: var(--el-color-info-light-3);
+}
+
+.send-button:disabled,
+.stop-button:disabled,
+.export-button:disabled,
+.import-button:disabled {
+  background-color: var(--el-color-info-light-5);
+  cursor: not-allowed;
+}
+
+.send-button i,
+.stop-button i,
+.export-button i,
+.import-button i {
+  margin-right: 5px;
+}
+
 /* 思考块样式 */
 .think-block {
   margin: 1rem 0;
